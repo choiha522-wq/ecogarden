@@ -1,0 +1,9 @@
+Django<6
+djangorestframework
+djangorestframework-simplejwt
+Pillow
+google-genai
+gunicorn
+whitenoise
+dj-database-url
+psycopg[binary]

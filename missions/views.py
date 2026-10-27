@@ -1,0 +1,275 @@
+import math
+from io import BytesIO
+import logging
+
+from PIL import Image, ImageOps
+from django.db import IntegrityError, transaction
+from django.db.models import Count
+from datetime import timedelta
+
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .daily import ensure_daily
+from .models import Mission, MissionSubmission
+from .serializers import MissionSerializer, QuizQuestionSerializer
+from .services import verify_mission_photo
+
+logger = logging.getLogger(__name__)
+
+
+def todays_mission(mission_id, **extra):
+    """오늘의 미션 중에서만 도전할 수 있어요. 자정이 지나 목록이 바뀐 뒤 어제 미션을 내면 안내해요."""
+    try:
+        return ensure_daily().get(pk=mission_id, **extra)
+    except Mission.DoesNotExist:
+        raise ValidationError({'detail': '오늘의 미션이 아니에요. 새로고침해서 새 미션을 확인해 주세요.'})
+
+
+def grant_reward(user, mission):
+    user.points += mission.reward_points
+    user.tickets += mission.reward_tickets
+    user.water_drops += mission.reward_water
+    user.sunlight += mission.reward_sunlight
+    user.save(update_fields=['points', 'tickets', 'water_drops', 'sunlight'])
+
+
+def reward_text(mission):
+    parts = [f'+{mission.reward_points}P', f'티켓 +{mission.reward_tickets}']
+    if mission.reward_water:
+        parts.append(f'💧+{mission.reward_water}')
+    if mission.reward_sunlight:
+        parts.append(f'☀️+{mission.reward_sunlight}')
+    return ', '.join(parts)
+
+
+class MissionListView(generics.ListAPIView):
+    """오늘의 미션 목록. ?category=observation 식으로 필터링. 로그인 안 해도 구경할 수 있어요."""
+    serializer_class = MissionSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        qs = ensure_daily()  # 오늘의 미션 (매일 자정에 새로 뽑혀요)
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        return qs
+
+
+class MissionSubmitView(APIView):
+    """
+    [사진 인증 미션] 사진을 제출하면 AI(Gemini)가 검증하고, 통과해야만 보상이 지급됩니다.
+    퀴즈 미션은 이 API가 아니라 /quiz/ 계열 API를 사용합니다.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, mission_id):
+        mission = todays_mission(mission_id)
+        if mission.mission_type != 'photo':
+            return Response({'detail': '이 미션은 사진 인증 미션이 아니에요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        photo = request.FILES.get('photo')
+        if photo is None:
+            return Response({'detail': '사진을 첨부해 주세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        if photo.size > 12 * 1024 * 1024:
+            return Response({'detail': '사진은 12MB 이하로 올려 주세요.'}, status=413)
+        try:
+            image_bytes = _prepare_mission_image(photo)
+        except (ValueError, OSError, Image.DecompressionBombError):
+            return Response({'detail': '사진 파일을 읽을 수 없어요. JPG나 PNG 사진을 다시 선택해 주세요.'}, status=400)
+
+        try:
+            approved, label, ai_message = verify_mission_photo(image_bytes, mission)
+        except RuntimeError as exc:
+            logger.exception('Photo mission AI configuration error')
+            detail = ('AI 키가 설정되지 않았어요. 프로젝트 폴더의 .env에 GEMINI_API_KEY를 넣고 서버를 다시 시작해 주세요.'
+                      if 'GEMINI_API_KEY' in str(exc) else '사진 확인 서비스를 사용할 수 없어요. 잠시 후 다시 시도해 주세요.')
+            return Response({'detail': detail}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            logger.exception('Photo mission AI verification failed')
+            return Response(
+                {'detail': '사진 확인 서비스가 잠시 응답하지 않아요. 잠시 후 다시 제출해 주세요.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        with transaction.atomic():
+            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            submission, _ = MissionSubmission.objects.select_for_update().get_or_create(
+                user=user, mission=mission, date=timezone.localdate(),
+            )
+            if submission.approved:
+                return Response({'detail': '이미 완료한 미션이에요.'}, status=400)
+            submission.ai_label = label
+            if not approved:
+                submission.save(update_fields=['ai_label'])
+                return Response({'detail': f'사진이 미션과 맞지 않는 것 같아요. {ai_message}'.strip()}, status=400)
+            submission.approved = True
+            submission.save(update_fields=['ai_label', 'approved'])
+            grant_reward(user, mission)
+        request.user.points, request.user.tickets = user.points, user.tickets
+        request.user.water_drops, request.user.sunlight = user.water_drops, user.sunlight
+
+        label_part = f' (AI: {submission.ai_label})' if submission.ai_label else ''
+        return Response({
+            'detail': f'미션 완료!{label_part} {reward_text(mission)}',
+            'points': request.user.points,
+            'tickets': request.user.tickets,
+            'water_drops': request.user.water_drops,
+            'sunlight': request.user.sunlight,
+        })
+
+
+def _prepare_mission_image(upload):
+    """파일 크기와 실제 이미지 형식을 확인한 뒤 AI에 보낼 JPEG로 정규화해요."""
+    if upload.size > 12 * 1024 * 1024:
+        raise ValueError('사진이 너무 커요.')
+    image = ImageOps.exif_transpose(Image.open(upload)).convert('RGB')
+    image.thumbnail((1280, 1280))
+    buffer = BytesIO()
+    image.save(buffer, format='JPEG', quality=88, optimize=True)
+    return buffer.getvalue()
+
+
+class RecordMissionSubmitView(APIView):
+    """사진 없이 짧은 관찰 기록을 제출하는 미션."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, mission_id):
+        mission = todays_mission(mission_id, mission_type='record')
+        response_text = request.data.get('response', '')
+        if not isinstance(response_text, str):
+            return Response({'detail': '관찰 기록을 입력해 주세요.'}, status=400)
+        response_text = response_text.strip()
+        if len(response_text) < 15:
+            return Response({'detail': '관찰한 내용이나 궁금한 점을 15자 이상 적어 주세요.'}, status=400)
+        if len(response_text) > 500:
+            return Response({'detail': '관찰 기록은 500자 이내로 적어 주세요.'}, status=400)
+        try:
+            with transaction.atomic():
+                user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+                submission, _ = MissionSubmission.objects.select_for_update().get_or_create(
+                    user=user, mission=mission, date=timezone.localdate(),
+                )
+                if submission.approved:
+                    return Response({'detail': '이미 완료한 미션이에요.'}, status=400)
+                habitat = request.data.get('habitat', '')
+                sign = request.data.get('sign', '')
+                valid_habitats = {key for key, _ in MissionSubmission._meta.get_field('observation_habitat').choices}
+                valid_signs = {key for key, _ in MissionSubmission._meta.get_field('observation_sign').choices}
+                if habitat not in valid_habitats or sign not in valid_signs:
+                    return Response({'detail': '장소와 관찰 대상을 선택해 주세요.'}, status=400)
+                submission.observation_region = user.region_sido
+                submission.observation_habitat = habitat
+                submission.observation_sign = sign
+                submission.approved = True
+                submission.save(update_fields=['observation_region', 'observation_habitat', 'observation_sign', 'approved'])
+                grant_reward(user, mission)
+            return Response({'detail': f'관찰 기록 완료! {reward_text(mission)}', 'points': user.points,
+                             'tickets': user.tickets, 'water_drops': user.water_drops, 'sunlight': user.sunlight})
+        except IntegrityError:
+            return Response({'detail': '미션을 처리하지 못했어요. 다시 시도해 주세요.'}, status=400)
+
+
+
+class ObservationSummaryView(APIView):
+    """최근 관찰 미션을 개인 식별 없이 지역·장소·관찰 대상별로 집계해요."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        since = timezone.localdate() - timedelta(days=30)
+        qs = MissionSubmission.objects.filter(approved=True, mission__mission_type='record', date__gte=since).exclude(observation_sign='').exclude(observation_habitat='')
+        signs = list(qs.exclude(observation_sign='').values('observation_sign').annotate(total=Count('id')).order_by('-total'))
+        regions = list(qs.values('observation_region').exclude(observation_region='')
+                       .annotate(total=Count('id')).filter(total__gte=3).order_by('-total'))
+        labels = dict(MissionSubmission._meta.get_field('observation_sign').choices)
+        return Response({
+            'days': 30, 'total': qs.count(),
+            'signs': [{'key': row['observation_sign'], 'label': labels.get(row['observation_sign'], '기타'), 'count': row['total']} for row in signs],
+            'regions': [{'name': row['observation_region'], 'count': row['total']} for row in regions],
+        })
+
+
+def needed_to_pass(total):
+    """전체 문제의 60% 이상 맞혀야 통과 (3문제면 2개)."""
+    return max(1, math.ceil(total * 0.6))
+
+
+class QuizDetailView(APIView):
+    """퀴즈 문제 목록. 정답과 해설은 포함하지 않아요."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, mission_id):
+        mission = todays_mission(mission_id, mission_type='quiz')
+        questions = list(mission.questions.all())
+        if not questions:
+            return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'id': mission.id,
+            'title': mission.title,
+            'need': needed_to_pass(len(questions)),
+            'questions': QuizQuestionSerializer(questions, many=True).data,
+        })
+
+
+class QuizSubmitView(APIView):
+    """
+    퀴즈 채점. 요청: {"answers": {"<문제id>": <고른 보기 번호(0부터)>, ...}}
+    채점은 서버에서만 하고, 통과했을 때만 정답/해설을 알려주며 보상을 지급해요.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, mission_id):
+        mission = todays_mission(mission_id, mission_type='quiz')
+        questions = list(mission.questions.all())
+        if not questions:
+            return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        answers = request.data.get('answers')
+        if not isinstance(answers, dict):
+            return Response({'detail': '답안 형식이 올바르지 않아요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        submission, _ = MissionSubmission.objects.get_or_create(user=request.user, mission=mission, date=timezone.localdate())
+        if submission.approved:
+            return Response({'detail': '이미 완료한 미션이에요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        results, correct = [], 0
+        for q in questions:
+            chosen = answers.get(str(q.id))
+            ok = isinstance(chosen, int) and not isinstance(chosen, bool) and chosen == q.answer - 1
+            correct += ok
+            results.append({'id': q.id, 'correct': ok, '_q': q})
+
+        total, need = len(questions), needed_to_pass(len(questions))
+        passed = correct >= need
+
+        if passed:
+            with transaction.atomic():
+                user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+                submission = MissionSubmission.objects.select_for_update().get(pk=submission.pk)
+                if submission.approved:
+                    return Response({'detail': '이미 완료한 미션이에요.'}, status=400)
+                submission.approved = True
+                submission.save(update_fields=['approved'])
+                grant_reward(user, mission)
+            request.user.points, request.user.tickets = user.points, user.tickets
+            request.user.water_drops, request.user.sunlight = user.water_drops, user.sunlight
+            for r in results:
+                q = r.pop('_q')
+                r['answer'] = q.answer - 1
+                r['explanation'] = q.explanation
+            return Response({
+                'passed': True, 'correct': correct, 'total': total, 'need': need, 'results': results,
+                'detail': f'퀴즈 성공! {correct}/{total} · {reward_text(mission)}',
+                'points': request.user.points, 'tickets': request.user.tickets,
+                'water_drops': request.user.water_drops, 'sunlight': request.user.sunlight,
+            })
+
+        for r in results:
+            r.pop('_q')  # 실패했을 땐 어느 문제가 틀렸는지만 알려주고 정답은 숨김
+        return Response({
+            'passed': False, 'correct': correct, 'total': total, 'need': need, 'results': results,
+            'detail': f'{correct}/{total}개 맞혔어요. {need}개 이상 맞혀야 해요. 틀린 문제를 다시 생각해 봐요!',
+        })
