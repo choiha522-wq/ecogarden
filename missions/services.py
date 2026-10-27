@@ -6,42 +6,45 @@ Gemini(Google AI Studio)를 이용한 AI 기능 모음.
 AI 검증을 수행할 수 없으면 예외를 발생시켜 미션을 통과시키지 않습니다.
 """
 import json
-import time
 
 from django.conf import settings
 
 def _client():
     from google import genai
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+    from google.genai import types
+    return genai.Client(
+        api_key=settings.GEMINI_API_KEY,
+        http_options=types.HttpOptions(
+            timeout=20_000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
 
 
 def _json_config():
     from google.genai import types
-    return types.GenerateContentConfig(response_mime_type='application/json')
+    return types.GenerateContentConfig(
+        response_mime_type='application/json',
+        thinking_config=types.ThinkingConfig(thinking_level='low'),
+        max_output_tokens=200,
+    )
 
 
-# 선택한 모델이 "수요 폭주(503)" 등으로 일시적으로 실패하면 잠깐 기다렸다 재시도하고,
-# 그래도 안 되면 아래 예비 모델로 넘어갑니다.
-FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash']
-RETRYABLE = (429, 500, 503, 504)
+# 기본 모델에 문제가 있으면 아래 예비 모델을 한 번 시도합니다.
+FALLBACK_MODELS = ['gemini-3.6-flash']
 
 
 def _generate(contents):
     client = _client()  # 변수에 담아 둬야 요청 도중 클라이언트가 닫히지 않아요
     models = [settings.GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != settings.GEMINI_MODEL]
     last = None
-    for model in models:
-        for attempt in range(2):
-            try:
-                return client.models.generate_content(model=model, contents=contents, config=_json_config())
-            except Exception as e:
-                last = e
-                code = getattr(e, 'code', None)
-                if code in RETRYABLE and attempt == 0:
-                    time.sleep(2)
-                    continue
-                # 환경 변수의 모델명이 폐기되었거나 권한이 없으면 예비 모델도 시도해요.
-                break
+    # Gemini SDK 자동 재시도는 끄고, 각 모델에 20초 제한을 둔 상태로
+    # 기본 모델과 예비 모델을 한 번씩만 호출해 최대 대기 시간을 제한해요.
+    for model in models[:2]:
+        try:
+            return client.models.generate_content(model=model, contents=contents, config=_json_config())
+        except Exception as e:
+            last = e
     raise last
 
 
