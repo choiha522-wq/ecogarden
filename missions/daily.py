@@ -14,9 +14,9 @@ from django.utils import timezone
 
 from .models import DailyMission, Mission
 
-DAILY_PHOTO = 1
+DAILY_PHOTO = 2
 DAILY_QUIZ = 2
-DAILY_RECORD = 2
+DAILY_RECORD = 1
 
 
 def _pick(day):
@@ -46,13 +46,11 @@ def ensure_daily(day=None, reroll=False):
     if reroll:
         DailyMission.objects.filter(date=day).delete()
     existing = DailyMission.objects.filter(date=day)
-    if existing.exists() and existing.count() < DAILY_PHOTO + DAILY_QUIZ + DAILY_RECORD:
-        existing.delete()  # 미션 구성이 바뀌었으면 오늘 목록을 다시 뽑아요.
-    if existing.exists() and Mission.objects.filter(is_active=True, mission_type='record').exists():
-        if not existing.filter(mission__mission_type='record').exists():
-            existing.delete()  # 새 기록형 미션 도입 시 오늘 목록도 한 번 새로 구성해요.
+    picked = _pick(day)
+    if existing.exists() and set(existing.values_list('mission_id', flat=True)) != {m.id for m in picked}:
+        existing.delete()  # 오늘 미션 비율이나 활성 미션 풀이 바뀌면 새 구성으로 다시 뽑아요.
     if not DailyMission.objects.filter(date=day).exists():
-        for m in _pick(day):
+        for m in picked:
             try:
                 with transaction.atomic():
                     DailyMission.objects.create(date=day, mission=m)

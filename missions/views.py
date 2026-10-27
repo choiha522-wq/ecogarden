@@ -1,4 +1,5 @@
 import math
+import random
 from io import BytesIO
 import logging
 
@@ -15,7 +16,7 @@ from rest_framework.views import APIView
 
 from .daily import ensure_daily
 from .models import Mission, MissionSubmission
-from .serializers import MissionSerializer, QuizQuestionSerializer
+from .serializers import MissionSerializer
 from .services import verify_mission_photo
 
 logger = logging.getLogger(__name__)
@@ -206,11 +207,32 @@ class QuizDetailView(APIView):
         questions = list(mission.questions.all())
         if not questions:
             return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)
+        # 정답 위치가 특정 번호에 몰리지 않도록 한 퀴즈 안에서 정답 위치를 분산해요.
+        max_choices = max((len(question.choices) for question in questions), default=1)
+        correct_positions = list(range(max_choices))
+        random.shuffle(correct_positions)
+        randomized = []
+        for index, question in enumerate(questions):
+            choices = question.choices
+            correct_index = question.answer - 1
+            if not choices or not 0 <= correct_index < len(choices):
+                return Response({'detail': '퀴즈 보기를 확인할 수 없어요.'}, status=500)
+            correct_position = correct_positions[index % len(correct_positions)] % len(choices)
+            order = [choice_index for choice_index in range(len(choices)) if choice_index != correct_index]
+            random.shuffle(order)
+            order.insert(correct_position, correct_index)
+            randomized.append({
+                'id': question.id,
+                'text': question.text,
+                'choices': [choices[choice_index] for choice_index in order],
+                # 브라우저에서 고른 표시 순번을 서버의 원래 보기 순번으로 변환할 때 사용해요.
+                'choice_indexes': order,
+            })
         return Response({
             'id': mission.id,
             'title': mission.title,
             'need': needed_to_pass(len(questions)),
-            'questions': QuizQuestionSerializer(questions, many=True).data,
+            'questions': randomized,
         })
 
 
