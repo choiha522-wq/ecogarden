@@ -20,7 +20,7 @@ class ShopItemListView(generics.ListAPIView):
     def get_serializer_context(self):
         context = super().get_serializer_context()
         user = self.request.user
-        context['garden_level'] = GardenProgress.objects.filter(user=user).values_list('level', flat=True).first() if user.is_authenticated else 1
+        context['garden_level'] = (GardenProgress.objects.filter(user=user).values_list('level', flat=True).first() or 1) if user.is_authenticated else 1
         return context
 
 
