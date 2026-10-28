@@ -106,7 +106,8 @@ class MissionSubmission(models.Model):
 class ObservationJournal(models.Model):
     """사용자마다 한 식물을 정해 매일 관찰 기록을 쌓는 개인 일지."""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='observation_journal')
-    seed_type = models.ForeignKey('garden.SeedType', on_delete=models.PROTECT, related_name='observation_journals')
+    plant_name = models.CharField(max_length=80, help_text='현실에서 키우는 식물 이름')
+    plant_confirmed = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 

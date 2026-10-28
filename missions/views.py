@@ -141,7 +141,7 @@ class RecordMissionSubmitView(APIView):
     def post(self, request, mission_id):
         mission = todays_mission(request.user, mission_id, mission_type='record')
         response_text = request.data.get('response', '')
-        plant_key = request.data.get('plant_key', '')
+        plant_name = request.data.get('plant_name', '')
         if not isinstance(response_text, str):
             return Response({'detail': '관찰 기록을 입력해 주세요.'}, status=400)
         response_text = response_text.strip()
@@ -157,10 +157,13 @@ class RecordMissionSubmitView(APIView):
         if habitat not in valid_habitats or sign not in valid_signs:
             return Response({'detail': '장소와 식물에서 관찰한 부분을 선택해 주세요.'}, status=400)
 
-        from garden.models import GardenProgress, SeedType
-        plant = SeedType.objects.filter(key=plant_key).first()
-        if plant is None:
-            return Response({'detail': '관찰할 식물을 선택해 주세요.'}, status=400)
+        if not isinstance(plant_name, str):
+            return Response({'detail': '현실에서 키우는 식물 이름을 적어 주세요.'}, status=400)
+        plant_name = ' '.join(plant_name.split())
+        if not plant_name:
+            return Response({'detail': '현실에서 키우는 식물 이름을 적어 주세요.'}, status=400)
+        if len(plant_name) > 80:
+            return Response({'detail': '식물 이름은 80자 이내로 적어 주세요.'}, status=400)
         today = timezone.localdate()
         try:
             with transaction.atomic():
@@ -171,20 +174,22 @@ class RecordMissionSubmitView(APIView):
                 if submission.approved:
                     return Response({'detail': '이미 완료한 미션이에요.'}, status=400)
 
-                progress, _ = GardenProgress.objects.get_or_create(user=user)
-                if plant.unlock_level > progress.level:
-                    return Response({'detail': f'{plant.name}은 정원 레벨 {plant.unlock_level}에서 도감이 열려요.'}, status=400)
-
                 journal = ObservationJournal.objects.filter(user=user).first()
                 if journal is None:
                     if request.data.get('journal_consent') is not True:
                         return Response({'detail': '관찰일지 저장에 동의해 주세요.'}, status=400)
-                    journal = ObservationJournal.objects.create(user=user, seed_type=plant)
-                elif journal.seed_type_id != plant.id:
-                    return Response({'detail': f'이 일지의 식물은 {journal.seed_type.name}이에요. 같은 식물을 계속 관찰해 주세요.'}, status=400)
+                    journal = ObservationJournal.objects.create(user=user, plant_name=plant_name)
+                else:
+                    if ObservationEntry.objects.filter(journal=journal, date=today).exists():
+                        return Response({'detail': '오늘 관찰일지는 이미 저장했어요.'}, status=400)
+                    if not journal.plant_confirmed:
+                        # 이전 버전에서 고른 도감 식물명은 현실에서 키우는 식물인지 첫 새 기록에서 확인해요.
+                        journal.plant_name = plant_name
+                        journal.plant_confirmed = True
+                        journal.save(update_fields=['plant_name', 'plant_confirmed'])
+                    elif journal.plant_name.casefold() != plant_name.casefold():
+                        return Response({'detail': f'이 일지에는 {journal.plant_name}을(를) 기록하고 있어요. 현실에서 같은 식물을 계속 관찰해 주세요.'}, status=400)
 
-                if ObservationEntry.objects.filter(journal=journal, date=today).exists():
-                    return Response({'detail': '오늘 관찰일지는 이미 저장했어요.'}, status=400)
                 ObservationEntry.objects.create(journal=journal, date=today, response=response_text,
                                                 habitat=habitat, sign=sign)
                 submission.observation_region = user.region_sido
@@ -193,7 +198,7 @@ class RecordMissionSubmitView(APIView):
                 submission.approved = True
                 submission.save(update_fields=['observation_region', 'observation_habitat', 'observation_sign', 'approved'])
                 grant_reward(user, mission)
-            return Response({'detail': f'{plant.name} 관찰일지 저장 완료! {reward_text(mission)}',
+            return Response({'detail': f'{plant_name} 관찰일지 저장 완료! {reward_text(mission)}',
                              'points': user.points, 'tickets': user.tickets,
                              'water_drops': user.water_drops, 'sunlight': user.sunlight})
         except IntegrityError:
@@ -205,14 +210,14 @@ class ObservationJournalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        journal = ObservationJournal.objects.filter(user=request.user).select_related('seed_type').first()
+        journal = ObservationJournal.objects.filter(user=request.user).first()
         if journal is None:
             return Response({'target': None, 'entries': []})
         habitats = dict(ObservationEntry._meta.get_field('habitat').choices)
         signs = dict(ObservationEntry._meta.get_field('sign').choices)
         entries = journal.entries.all()
         return Response({
-            'target': {'key': journal.seed_type.key, 'name': journal.seed_type.name, 'emoji': journal.seed_type.emoji},
+            'target': {'name': journal.plant_name, 'confirmed': journal.plant_confirmed},
             'entries': [{'date': row.date.isoformat(), 'response': row.response,
                          'habitat': habitats.get(row.habitat, ''), 'sign': signs.get(row.sign, '')}
                         for row in entries],
