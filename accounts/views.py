@@ -140,11 +140,18 @@ class CheerFriendView(APIView):
             return Response({'detail': '친구를 찾을 수 없어요.'}, status=404)
         try:
             with transaction.atomic():
-                user = User.objects.select_for_update().get(pk=request.user.pk)
+                locked_users = {
+                    item.pk: item for item in User.objects.select_for_update()
+                    .filter(pk__in=sorted((request.user.pk, friend.pk))).order_by('pk')
+                }
+                user = locked_users[request.user.pk]
+                friend = locked_users[friend.pk]
                 FriendCheer.objects.create(user=user, friend=friend, date=timezone.localdate())
                 user.points += 5
-                user.save(update_fields=['points'])
-            return Response({'detail': '응원했어요! +5P', 'points': user.points})
+                friend.points += 5
+                User.objects.bulk_update([user, friend], ['points'])
+            return Response({'detail': '응원했어요! 두 사람 모두 ⭐ +5P',
+                             'points': user.points, 'friend_points': friend.points})
         except IntegrityError:
             return Response({'detail': '오늘은 이미 응원했어요.'}, status=400)
 

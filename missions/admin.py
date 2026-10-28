@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import DailyMission, Mission, MissionSubmission, QuizQuestion
+from .models import DailyMission, Mission, MissionSubmission, ObservationEntry, ObservationJournal, QuizQuestion
 
 
 class QuizQuestionInline(admin.StackedInline):
@@ -17,3 +17,5 @@ class MissionAdmin(admin.ModelAdmin):
 
 admin.site.register(MissionSubmission)
 admin.site.register(DailyMission)
+admin.site.register(ObservationJournal)
+admin.site.register(ObservationEntry)

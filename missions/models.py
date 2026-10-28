@@ -39,14 +39,14 @@ class Mission(models.Model):
 
 class DailyMission(models.Model):
     """
-    그날의 미션 목록. 하루가 시작되고 처음 미션 목록을 열 때 한 번 뽑아서 저장해요.
-    (그래서 하루 동안은 관리자가 미션을 추가/수정해도 오늘의 목록이 바뀌지 않아요.)
+    계정별 오늘의 미션 목록. 처음 미션을 열 때 계정과 날짜를 기준으로 뽑아 저장해요.
     """
     date = models.DateField(db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='daily_missions')
     mission = models.ForeignKey(Mission, on_delete=models.CASCADE, related_name='daily_entries')
 
     class Meta:
-        unique_together = ('date', 'mission')
+        unique_together = ('date', 'user', 'mission')
 
     def __str__(self):
         return f'{self.date} {self.mission}'
@@ -101,3 +101,23 @@ class MissionSubmission(models.Model):
 
     def __str__(self):
         return f'{self.user} - {self.mission}'
+
+
+class ObservationJournal(models.Model):
+    """사용자마다 한 식물을 정해 매일 관찰 기록을 쌓는 개인 일지."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='observation_journal')
+    seed_type = models.ForeignKey('garden.SeedType', on_delete=models.PROTECT, related_name='observation_journals')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ObservationEntry(models.Model):
+    """사용자의 개인 관찰 일지. 기록 문장은 해당 사용자에게만 보여요."""
+    journal = models.ForeignKey(ObservationJournal, on_delete=models.CASCADE, related_name='entries')
+    date = models.DateField(default=timezone.localdate, db_index=True)
+    response = models.CharField(max_length=500)
+    habitat = models.CharField(max_length=20, choices=[('garden', '정원/화분'), ('school', '학교'), ('park', '공원/화단'), ('forest', '숲'), ('other', '기타')])
+    sign = models.CharField(max_length=20, choices=[('leaf', '잎'), ('flower', '꽃'), ('fruit_seed', '열매/씨앗'), ('other', '기타')])
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=('journal', 'date'), name='unique_daily_observation_entry')]
+        ordering = ['-date', '-id']

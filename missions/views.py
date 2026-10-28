@@ -15,17 +15,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .daily import ensure_daily
-from .models import Mission, MissionSubmission
+from .models import Mission, MissionSubmission, ObservationEntry, ObservationJournal
 from .serializers import MissionSerializer
 from .services import verify_mission_photo
 
 logger = logging.getLogger(__name__)
 
 
-def todays_mission(mission_id, **extra):
+def todays_mission(user, mission_id, **extra):
     """오늘의 미션 중에서만 도전할 수 있어요. 자정이 지나 목록이 바뀐 뒤 어제 미션을 내면 안내해요."""
     try:
-        return ensure_daily().get(pk=mission_id, **extra)
+        return ensure_daily(user=user).get(pk=mission_id, **extra)
     except Mission.DoesNotExist:
         raise ValidationError({'detail': '오늘의 미션이 아니에요. 새로고침해서 새 미션을 확인해 주세요.'})
 
@@ -53,7 +53,7 @@ class MissionListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        qs = ensure_daily()  # 오늘의 미션 (매일 자정에 새로 뽑혀요)
+        qs = ensure_daily(user=self.request.user)  # 계정별 오늘 미션
         category = self.request.query_params.get('category')
         if category:
             qs = qs.filter(category=category)
@@ -68,7 +68,7 @@ class MissionSubmitView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, mission_id):
-        mission = todays_mission(mission_id)
+        mission = todays_mission(request.user, mission_id)
         if mission.mission_type != 'photo':
             return Response({'detail': '이 미션은 사진 인증 미션이 아니에요.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -135,12 +135,13 @@ def _prepare_mission_image(upload):
 
 
 class RecordMissionSubmitView(APIView):
-    """사진 없이 짧은 관찰 기록을 제출하는 미션."""
+    """한 식물을 정해 매일 기록하고 개인 관찰 일지에 저장하는 미션."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, mission_id):
-        mission = todays_mission(mission_id, mission_type='record')
+        mission = todays_mission(request.user, mission_id, mission_type='record')
         response_text = request.data.get('response', '')
+        plant_key = request.data.get('plant_key', '')
         if not isinstance(response_text, str):
             return Response({'detail': '관찰 기록을 입력해 주세요.'}, status=400)
         response_text = response_text.strip()
@@ -148,31 +149,74 @@ class RecordMissionSubmitView(APIView):
             return Response({'detail': '관찰한 내용이나 궁금한 점을 15자 이상 적어 주세요.'}, status=400)
         if len(response_text) > 500:
             return Response({'detail': '관찰 기록은 500자 이내로 적어 주세요.'}, status=400)
+
+        habitat = request.data.get('habitat', '')
+        sign = request.data.get('sign', '')
+        valid_habitats = {key for key, _ in MissionSubmission._meta.get_field('observation_habitat').choices}
+        valid_signs = {'leaf', 'flower', 'fruit_seed', 'other'}
+        if habitat not in valid_habitats or sign not in valid_signs:
+            return Response({'detail': '장소와 식물에서 관찰한 부분을 선택해 주세요.'}, status=400)
+
+        from garden.models import GardenProgress, SeedType
+        plant = SeedType.objects.filter(key=plant_key).first()
+        if plant is None:
+            return Response({'detail': '관찰할 식물을 선택해 주세요.'}, status=400)
+        today = timezone.localdate()
         try:
             with transaction.atomic():
                 user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
                 submission, _ = MissionSubmission.objects.select_for_update().get_or_create(
-                    user=user, mission=mission, date=timezone.localdate(),
+                    user=user, mission=mission, date=today,
                 )
                 if submission.approved:
                     return Response({'detail': '이미 완료한 미션이에요.'}, status=400)
-                habitat = request.data.get('habitat', '')
-                sign = request.data.get('sign', '')
-                valid_habitats = {key for key, _ in MissionSubmission._meta.get_field('observation_habitat').choices}
-                valid_signs = {key for key, _ in MissionSubmission._meta.get_field('observation_sign').choices}
-                if habitat not in valid_habitats or sign not in valid_signs:
-                    return Response({'detail': '장소와 관찰 대상을 선택해 주세요.'}, status=400)
+
+                progress, _ = GardenProgress.objects.get_or_create(user=user)
+                if plant.unlock_level > progress.level:
+                    return Response({'detail': f'{plant.name}은 정원 레벨 {plant.unlock_level}에서 도감이 열려요.'}, status=400)
+
+                journal = ObservationJournal.objects.filter(user=user).first()
+                if journal is None:
+                    if request.data.get('journal_consent') is not True:
+                        return Response({'detail': '관찰일지 저장에 동의해 주세요.'}, status=400)
+                    journal = ObservationJournal.objects.create(user=user, seed_type=plant)
+                elif journal.seed_type_id != plant.id:
+                    return Response({'detail': f'이 일지의 식물은 {journal.seed_type.name}이에요. 같은 식물을 계속 관찰해 주세요.'}, status=400)
+
+                if ObservationEntry.objects.filter(journal=journal, date=today).exists():
+                    return Response({'detail': '오늘 관찰일지는 이미 저장했어요.'}, status=400)
+                ObservationEntry.objects.create(journal=journal, date=today, response=response_text,
+                                                habitat=habitat, sign=sign)
                 submission.observation_region = user.region_sido
                 submission.observation_habitat = habitat
                 submission.observation_sign = sign
                 submission.approved = True
                 submission.save(update_fields=['observation_region', 'observation_habitat', 'observation_sign', 'approved'])
                 grant_reward(user, mission)
-            return Response({'detail': f'관찰 기록 완료! {reward_text(mission)}', 'points': user.points,
-                             'tickets': user.tickets, 'water_drops': user.water_drops, 'sunlight': user.sunlight})
+            return Response({'detail': f'{plant.name} 관찰일지 저장 완료! {reward_text(mission)}',
+                             'points': user.points, 'tickets': user.tickets,
+                             'water_drops': user.water_drops, 'sunlight': user.sunlight})
         except IntegrityError:
-            return Response({'detail': '미션을 처리하지 못했어요. 다시 시도해 주세요.'}, status=400)
+            return Response({'detail': '관찰일지를 저장하지 못했어요. 이미 오늘 기록했는지 확인해 주세요.'}, status=400)
 
+
+class ObservationJournalView(APIView):
+    """로그인한 사용자 본인의 고정 식물과 관찰일지만 반환해요."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        journal = ObservationJournal.objects.filter(user=request.user).select_related('seed_type').first()
+        if journal is None:
+            return Response({'target': None, 'entries': []})
+        habitats = dict(ObservationEntry._meta.get_field('habitat').choices)
+        signs = dict(ObservationEntry._meta.get_field('sign').choices)
+        entries = journal.entries.all()
+        return Response({
+            'target': {'key': journal.seed_type.key, 'name': journal.seed_type.name, 'emoji': journal.seed_type.emoji},
+            'entries': [{'date': row.date.isoformat(), 'response': row.response,
+                         'habitat': habitats.get(row.habitat, ''), 'sign': signs.get(row.sign, '')}
+                        for row in entries],
+        })
 
 
 class ObservationSummaryView(APIView):
@@ -203,7 +247,7 @@ class QuizDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, mission_id):
-        mission = todays_mission(mission_id, mission_type='quiz')
+        mission = todays_mission(request.user, mission_id, mission_type='quiz')
         questions = list(mission.questions.all())
         if not questions:
             return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -244,7 +288,7 @@ class QuizSubmitView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, mission_id):
-        mission = todays_mission(mission_id, mission_type='quiz')
+        mission = todays_mission(request.user, mission_id, mission_type='quiz')
         questions = list(mission.questions.all())
         if not questions:
             return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)

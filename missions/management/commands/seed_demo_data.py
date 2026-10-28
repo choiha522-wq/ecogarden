@@ -29,9 +29,7 @@ MISSIONS = [
     ('local', '생물다양성이란?', '🌈', '다양한 생물이 함께 사는 것이 왜 중요한지 알아봐요.', 20, False, 'quiz'),
     ('microbe', '흙 속 친구, 지렁이', '🪱', '지렁이가 흙을 어떻게 건강하게 만드는지 알아봐요.', 20, False, 'quiz'),
     ('local', '탄소와 우리 동네 나무', '🌍', '이산화탄소와 나무의 관계를 알아보는 퀴즈예요.', 20, False, 'quiz'),
-    ('local', '그늘과 햇빛을 비교해요', '☀️', '집이나 학교 주변에서 그늘과 햇빛이 드는 곳을 살펴보고, 그곳의 온도나 식물 모습 차이를 두 문장으로 적어요.', 25, False, 'record'),
-    ('observation', '오늘 만난 생물 기록', '📝', '오늘 본 식물이나 곤충 한 가지를 떠올려 어디에서 보았는지와 어떤 점이 눈에 띄었는지 적어요.', 25, False, 'record'),
-    ('microbe', '흙을 건강하게 하는 방법', '🪱', '식물 주변의 흙을 관찰하고 흙을 건강하게 지키는 방법이나 궁금한 점을 두 문장으로 적어요.', 25, False, 'record'),
+    ('observation', '나의 식물 관찰일지', '📓', '식물 한 종을 정해 매일 같은 식물을 관찰해요. 오늘 발견한 점이나 어제와 달라진 점을 기록해 마이페이지에서 모아 봐요.', 25, False, 'record'),
 ]
 
 # 제목 -> [(문제, [보기...], 정답번호(1부터), 해설)]
@@ -153,6 +151,8 @@ class Command(BaseCommand):
                 item.name, item.emoji, item.description = f"{sp['name']} 씨앗", sp['emoji'], sp['description']
                 item.save(update_fields=['name', 'emoji', 'description'])
 
+        Mission.objects.filter(title__in=['그늘과 햇빛을 비교해요', '오늘 만난 생물 기록', '흙을 건강하게 하는 방법'], mission_type='record').update(is_active=False)
+
         for category, title, emoji, desc, points, ai, mtype in MISSIONS:
             mission, created = Mission.objects.get_or_create(
                 title=title,
@@ -169,9 +169,17 @@ class Command(BaseCommand):
             if created or (mission.reward_water, mission.reward_sunlight) == (1, 0):
                 mission.reward_water, mission.reward_sunlight = want
                 mission.save(update_fields=['reward_water', 'reward_sunlight'])
-            if mission.mission_type != mtype:
+            type_changed = mission.mission_type != mtype
+            if type_changed:
                 mission.mission_type = mtype
                 mission.requires_photo = (mtype == 'photo')
+            if title == '나의 식물 관찰일지':
+                mission.description = desc
+                mission.category = category
+                mission.emoji = emoji
+                mission.is_active = True
+                mission.save(update_fields=['mission_type', 'requires_photo', 'description', 'category', 'emoji', 'is_active'])
+            elif type_changed:
                 mission.save()
 
             if mtype == 'quiz' and not mission.questions.exists():
