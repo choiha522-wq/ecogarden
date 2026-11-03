@@ -204,13 +204,6 @@ def run_steps(user, steps):
         co2 = _step(plots, co2, size)
     with transaction.atomic():
         GardenPlot.objects.bulk_update(plots, PLOT_FIELDS)
-        newly_completed = []
-        for plot in plots:
-            if plot.seed_type_id and plot.growth_stage >= 4 and not plot.completion_recorded:
-                if GardenPlot.objects.filter(pk=plot.pk, completion_recorded=False).update(completion_recorded=True):
-                    newly_completed.append(min(plot.seed_type.difficulty, 3))
-        if newly_completed:
-            record_completed_plants(user, newly_completed)
     user.co2_ppm = co2
 
 

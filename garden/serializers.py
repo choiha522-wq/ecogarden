@@ -20,6 +20,17 @@ class SeedTypeSerializer(serializers.ModelSerializer):
             'ecology_notes', 'source_title', 'source_url', 'reference_image_url',
         )
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self.context.get('catalog'):
+            unlocked = instance.unlock_level <= 1 or instance.key in self.context.get('collected_keys', set())
+            data['collected'] = instance.key in self.context.get('collected_keys', set())
+            data['encyclopedia_unlocked'] = unlocked
+            if not unlocked:
+                for field in ('description', 'scientific_name', 'ecology_notes', 'source_title', 'source_url', 'reference_image_url', 'benefits'):
+                    data[field] = [] if field == 'benefits' else ''
+        return data
+
     def get_palette(self, obj):
         return [c for c in obj.palette.split(',') if c]
 

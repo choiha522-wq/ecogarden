@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from accounts.models import User
 
-from garden.models import GardenProgress, UserSeedInventory
+from garden.models import GardenProgress, UserSeedInventory, PlantCollection
 from .models import ShopItem
 from .serializers import ShopItemSerializer
 
@@ -38,7 +38,7 @@ class BuyItemView(APIView):
             if item.seed_type_id:
                 progress, _ = GardenProgress.objects.get_or_create(user=user)
                 if item.seed_type.unlock_level > progress.level:
-                    return Response({'detail': f'{item.seed_type.name} 도감은 정원 레벨 {item.seed_type.unlock_level}에서 열려요.'}, status=400)
+                    return Response({'detail': f'{item.seed_type.name} 씨앗은 정원 레벨 {item.seed_type.unlock_level}에서 열려요.'}, status=400)
             if user.points < item.price:
                 return Response({'detail': '포인트가 부족해요.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -46,6 +46,7 @@ class BuyItemView(APIView):
             if item.item_type == 'seed':
                 inv, _ = UserSeedInventory.objects.get_or_create(user=user, seed_type=item.seed_type)
                 inv = UserSeedInventory.objects.select_for_update().get(pk=inv.pk)
+                PlantCollection.objects.get_or_create(user=user, seed_type=item.seed_type)
                 inv.quantity += 1
                 inv.save(update_fields=['quantity'])
             elif item.item_type == 'nutrient':

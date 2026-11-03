@@ -53,6 +53,8 @@ class SeedType(models.Model):
 class GardenProgress(models.Model):
     """레벨별 요구 난이도 식물을 끝까지 키운 누적 기록."""
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='garden_progress')
+    theme = models.CharField(max_length=12, default='spring')
+    owned_themes = models.JSONField(default=list, blank=True)
     level = models.PositiveIntegerField(default=1)
     easy_completed = models.PositiveIntegerField(default=0)
     medium_completed = models.PositiveIntegerField(default=0)
@@ -154,3 +156,20 @@ class GardenPlot(models.Model):
         buf = BytesIO()
         img.save(buf, format='PNG')
         self.pixel_photo.save(f'plot_{self.pk}.png', ContentFile(buf.getvalue()), save=False)
+
+
+class PlantCollection(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    seed_type = models.ForeignKey(SeedType, on_delete=models.CASCADE)
+    harvested_count = models.PositiveIntegerField(default=0)
+    first_collected_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'seed_type'], name='unique_plant_collection')]
+
+
+class WeeklyGoalClaim(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    week_start = models.DateField()
+    claimed_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'week_start'], name='unique_weekly_goal_claim')]

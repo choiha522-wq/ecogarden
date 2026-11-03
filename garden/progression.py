@@ -13,16 +13,22 @@ def tier_for_difficulty(difficulty):
 
 
 def grid_size_for_level(level):
-    return 3 if level <= 1 else 4 if level == 2 else MAX_GRID_SIZE
+    return 3 if level <= 1 else 4 if level <= 4 else MAX_GRID_SIZE
+
+
+PLOT_COUNTS = (9, 11, 13, 16, 19, 22, 25)
+SLOT_ORDER = ([r * 5 + c for r in range(3) for c in range(3)]
+              + [r * 5 + c for r in range(4) for c in range(4) if r >= 3 or c >= 3]
+              + [r * 5 + c for r in range(5) for c in range(5) if r >= 4 or c >= 4])
 
 
 def plot_count_for_level(level):
-    size = grid_size_for_level(level)
-    return size * size
+    return PLOT_COUNTS[max(0, min(6, int(level) - 1))]
 
 
-def unlocked_slot_indexes(size):
-    """5칸 너비의 고정 슬롯 중 왼쪽 위 size×size 영역을 열어요."""
+def unlocked_slot_indexes(size, level=None):
+    if level is not None:
+        return SLOT_ORDER[:plot_count_for_level(level)]
     return [row * MAX_GRID_SIZE + col for row in range(size) for col in range(size)]
 
 
@@ -38,12 +44,14 @@ def requirements_for_target_level(target_level):
 def calculate_level(progress):
     counts = {1: progress.easy_completed, 2: progress.medium_completed, 3: progress.hard_completed}
     level = 1
-    while True:
+    while level < 7:
         required = requirements_for_target_level(level + 1)
         if all(counts[tier] >= amount for tier, amount in required.items()):
             level += 1
         else:
             return level
+
+    return level
 
 
 def record_completed_plants(user, difficulties):
@@ -78,7 +86,11 @@ def progress_payload(progress):
             'medium': progress.medium_completed,
             'hard': progress.hard_completed,
         },
-        'next_level': progress.level + 1,
+        'next_level': min(7, progress.level + 1),
+        'max_level': 7,
+        'is_max_level': progress.level >= 7,
+        'theme': progress.theme,
+        'owned_themes': list(set(['spring'] + progress.owned_themes)),
         'required_tier': tier,
         'required_tier_label': TIER_LABELS[tier],
         'required_count': target_count,

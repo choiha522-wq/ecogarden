@@ -214,3 +214,7 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS('데모 데이터 생성 완료'))
+
+
+        from garden.unlocks import assign_unlock_levels
+        assign_unlock_levels(SeedType)

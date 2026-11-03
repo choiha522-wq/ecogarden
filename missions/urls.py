@@ -1,8 +1,9 @@
 from django.urls import path
 
-from .views import MissionListView, MissionSubmitView, RecordMissionSubmitView, ObservationSummaryView, QuizDetailView, QuizSubmitView, ObservationJournalView
+from .views import WeeklyGoalView, MissionListView, MissionSubmitView, RecordMissionSubmitView, ObservationSummaryView, QuizDetailView, QuizSubmitView, ObservationJournalView
 
 urlpatterns = [
+    path('weekly/', WeeklyGoalView.as_view(), name='weekly-goal'),
     path('', MissionListView.as_view(), name='mission-list'),
     path('observations/summary/', ObservationSummaryView.as_view(), name='observation-summary'),
     path('journal/', ObservationJournalView.as_view(), name='observation-journal'),

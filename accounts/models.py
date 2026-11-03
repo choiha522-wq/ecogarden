@@ -22,6 +22,7 @@ class User(AbstractUser):
     기본 Django User에 서비스 전용 재화(포인트, 게임 티켓, 영양제)를 추가한 커스텀 유저 모델.
     index.html 프로토타입의 S.pt / S.tk / S.nutri 상태를 DB로 옮긴 것.
     """
+    tutorial_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
     points = models.PositiveIntegerField(default=0)
     tickets = models.PositiveIntegerField(default=0)
     nutrients = models.PositiveIntegerField(default=0)

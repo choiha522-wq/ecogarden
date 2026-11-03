@@ -1,0 +1,11 @@
+:root[data-garden-theme="spring"]{--sky:#E6F4F5;--soil:#B98D62}
+:root[data-garden-theme="summer"]{--sky:#CFEFF8;--soil:#9F7850}
+:root[data-garden-theme="autumn"]{--sky:#F9E8CD;--soil:#BC8354}
+:root[data-garden-theme="winter"]{--sky:#DFEAF2;--soil:#A4ADB4}
+[data-garden-theme] .gb{background:linear-gradient(180deg,var(--sky),color-mix(in srgb,var(--sky) 50%,var(--card)));border-radius:22px;transition:background .25s ease}
+.harvest-ready{animation:harvest-glow 2s ease-in-out infinite;margin:12px 0;border:2px solid #B78A20}
+@keyframes harvest-glow{50%{box-shadow:0 0 0 5px #FFC94D35}}
+button:disabled{cursor:not-allowed;opacity:.6}
+details.panel>summary{cursor:pointer;font-weight:700;padding:6px 0}
+details.panel[open]>summary{margin-bottom:10px}
+@media(prefers-reduced-motion:reduce){.harvest-ready{animation:none}}

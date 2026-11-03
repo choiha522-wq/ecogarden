@@ -14,6 +14,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .learning import learning_card
 from .daily import ensure_daily
 from .models import Mission, MissionSubmission, ObservationEntry, ObservationJournal
 from .serializers import MissionSerializer
@@ -115,6 +116,7 @@ class MissionSubmitView(APIView):
 
         label_part = f' (AI: {submission.ai_label})' if submission.ai_label else ''
         return Response({
+            'education': learning_card(mission),
             'detail': f'미션 완료!{label_part} {reward_text(mission)}',
             'points': request.user.points,
             'tickets': request.user.tickets,
@@ -198,7 +200,7 @@ class RecordMissionSubmitView(APIView):
                 submission.approved = True
                 submission.save(update_fields=['observation_region', 'observation_habitat', 'observation_sign', 'approved'])
                 grant_reward(user, mission)
-            return Response({'detail': f'{plant_name} 관찰일지 저장 완료! {reward_text(mission)}',
+            return Response({'education': learning_card(mission), 'detail': f'{plant_name} 관찰일지 저장 완료! {reward_text(mission)}',
                              'points': user.points, 'tickets': user.tickets,
                              'water_drops': user.water_drops, 'sunlight': user.sunlight})
         except IntegrityError:
@@ -332,6 +334,7 @@ class QuizSubmitView(APIView):
                 r['answer'] = q.answer - 1
                 r['explanation'] = q.explanation
             return Response({
+                'education': learning_card(mission),
                 'passed': True, 'correct': correct, 'total': total, 'need': need, 'results': results,
                 'detail': f'퀴즈 성공! {correct}/{total} · {reward_text(mission)}',
                 'points': request.user.points, 'tickets': request.user.tickets,
@@ -344,3 +347,37 @@ class QuizSubmitView(APIView):
             'passed': False, 'correct': correct, 'total': total, 'need': need, 'results': results,
             'detail': f'{correct}/{total}개 맞혔어요. {need}개 이상 맞혀야 해요. 틀린 문제를 다시 생각해 봐요!',
         })
+
+
+class WeeklyGoalView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def state(self, user):
+        from django.db.models import Sum
+        from garden.models import WeeklyGoalClaim
+        today = timezone.localdate()
+        monday = today - timedelta(days=today.weekday())
+        qs = MissionSubmission.objects.filter(user=user, approved=True, date__gte=monday, date__lt=monday + timedelta(days=7))
+        count = qs.count()
+        points = qs.aggregate(value=Sum('mission__reward_points'))['value'] or 0
+        return {'week_start': str(monday), 'week_end': str(monday + timedelta(days=6)),
+                'completed': count, 'required': 7, 'mission_points': points, 'required_points': 150,
+                'eligible': count >= 7 and points >= 150,
+                'claimed': WeeklyGoalClaim.objects.filter(user=user, week_start=monday).exists(), 'reward': 80}
+
+    def get(self, request):
+        return Response(self.state(request.user))
+
+    def post(self, request):
+        from datetime import date
+        from garden.models import WeeklyGoalClaim
+        with transaction.atomic():
+            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            state = self.state(user)
+            if not state['eligible'] or state['claimed']:
+                return Response({'detail': '이번 주 목표를 달성한 뒤 한 번만 받을 수 있어요.'}, status=400)
+            WeeklyGoalClaim.objects.create(user=user, week_start=date.fromisoformat(state['week_start']))
+            user.points += 80
+            user.save(update_fields=['points'])
+            state['claimed'] = True
+        return Response({**state, 'points': user.points, 'detail': '주간 목표 달성! +80P'})

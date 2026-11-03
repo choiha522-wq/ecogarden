@@ -1,6 +1,8 @@
 from io import BytesIO
 
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import F
 from PIL import Image, ImageOps
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -8,7 +10,7 @@ from rest_framework.views import APIView
 
 from . import sim
 from .ai import AIUnavailable, identify_plant
-from .models import GardenPlot, GardenProgress, SeedType, UserSeedInventory
+from .models import GardenPlot, GardenProgress, SeedType, UserSeedInventory, PlantCollection
 from .progression import grid_size_for_level, plot_count_for_level, progress_payload, unlocked_slot_indexes
 from .serializers import GardenPlotSerializer, SeedTypeSerializer, UserSeedInventorySerializer
 
@@ -18,13 +20,16 @@ def garden_state(user, detail=''):
     plots = list(GardenPlot.objects.filter(user=user).select_related('seed_type'))
     progress, _ = GardenProgress.objects.get_or_create(user=user)
     size = grid_size_for_level(progress.level)
-    opened = set(unlocked_slot_indexes(size))
+    opened = set(unlocked_slot_indexes(size, progress.level))
+    opened.update(p.slot_index for p in plots if p.seed_type_id or p.photo)
     poll = sim.pollination_bonus(plots)
     ctx = {'sun': sim.sun_levels(plots, size), 'poll': poll, 'unlocked_slot_indexes': opened}
     return {
         'detail': detail,
         'progression': progress_payload(progress),
-        'plot_count': plot_count_for_level(progress.level),
+        'collection': list(PlantCollection.objects.filter(user=user).values('seed_type__key', 'harvested_count')),
+        'points': user.points,
+        'plot_count': len(opened),
         'grid_size': size,
         'max_plot_count': 25,
         'co2_ppm': round(user.co2_ppm, 1),
@@ -75,6 +80,13 @@ class SpeciesListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     pagination_class = None
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        user = self.request.user
+        context['catalog'] = True
+        context['collected_keys'] = set(PlantCollection.objects.filter(user=user).values_list('seed_type__key', flat=True)) if user.is_authenticated else set()
+        return context
+
 
 class SeedInventoryView(APIView):
     """보유 씨앗 목록."""
@@ -95,7 +107,7 @@ class PlantSeedView(APIView):
         if plot is None or not plot.is_empty:
             return _bad('빈 화분이 아니에요.')
         progress, _ = GardenProgress.objects.get_or_create(user=request.user)
-        if slot_index not in unlocked_slot_indexes(grid_size_for_level(progress.level)):
+        if slot_index not in unlocked_slot_indexes(grid_size_for_level(progress.level), progress.level):
             return _bad(f'정원 레벨 {progress.level}에서 열리는 땅이에요.')
 
         inv = UserSeedInventory.objects.filter(
@@ -103,11 +115,11 @@ class PlantSeedView(APIView):
         ).first()
         if inv is None:
             return _bad('보유한 씨앗이 없어요.')
-        if inv.seed_type.unlock_level > progress.level:
-            return _bad(f'{inv.seed_type.name} 도감은 정원 레벨 {inv.seed_type.unlock_level}에서 열려요.')
+        # Previously owned seeds remain usable after the unlock rules change.
 
         inv.quantity -= 1
         inv.save(update_fields=['quantity'])
+        PlantCollection.objects.get_or_create(user=request.user, seed_type=inv.seed_type)
         plot.seed_type = inv.seed_type
         plot.growth_stage = 0
         plot.growth_progress = 0
@@ -246,7 +258,7 @@ class PlantPhotoView(APIView):
         if plot is None or not plot.is_empty:
             return _bad('빈 화분이 아니에요.')
         progress, _ = GardenProgress.objects.get_or_create(user=user)
-        if slot_index not in unlocked_slot_indexes(grid_size_for_level(progress.level)):
+        if slot_index not in unlocked_slot_indexes(grid_size_for_level(progress.level), progress.level):
             return _bad(f'정원 레벨 {progress.level}에서 열리는 땅이에요.')
         if sim.photo_plants_left(user) < 1:
             return _bad(f'오늘은 사진으로 심을 수 있는 횟수({sim.PHOTO_PLANT_DAILY}번)를 다 썼어요. 내일 다시 해봐요!')
@@ -269,8 +281,9 @@ class PlantPhotoView(APIView):
         if not found['is_plant'] or species is None:
             return _bad('어떤 식물인지 알아보지 못했어요. 나무나 꽃이 잘 보이게 가까이에서 다시 찍어볼까요?')
         if species.unlock_level > progress.level:
-            return _bad(f'{species.name} 도감은 정원 레벨 {species.unlock_level}에서 열려요.')
+            return _bad(f'{species.name} 사진 심기는 정원 레벨 {species.unlock_level}에서 열려요.')
 
+        PlantCollection.objects.get_or_create(user=user, seed_type=species)
         plot.seed_type = species
         plot.growth_stage = 1                 # 새싹으로 시작해요
         plot.growth_progress = 0
@@ -293,3 +306,50 @@ class PlantPhotoView(APIView):
             'match': found['match'], 'label': found['label'], 'reason': found['reason'],
         }
         return Response(data)
+
+
+class HarvestPlotView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, slot_index):
+        # User row serializes harvest/reward requests from this account.
+        with transaction.atomic():
+            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            sim.advance(user)
+            plot = GardenPlot.objects.select_for_update().filter(user=user, slot_index=slot_index).select_related('seed_type').first()
+            if not plot or not plot.seed_type_id or plot.is_dead or plot.growth_stage < 4:
+                return _bad('살아 있는 성장 완료 식물만 수확할 수 있어요.')
+            collection, _ = PlantCollection.objects.get_or_create(user=user, seed_type=plot.seed_type)
+            PlantCollection.objects.filter(pk=collection.pk).update(harvested_count=F('harvested_count') + 1)
+            if not plot.completion_recorded:
+                from .progression import record_completed_plants
+                record_completed_plants(user, [plot.seed_type.difficulty])
+            name = plot.seed_type.name
+            user.points += 20
+            user.save(update_fields=['points'])
+            plot.reset_plant()
+            plot.save()
+        return Response(garden_state(user, f'✨ {name} 수확! 성과 도감에 기록하고 +20P를 받았어요.'))
+
+
+class GardenStyleView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        theme = request.data.get('theme')
+        if theme not in ('spring', 'summer', 'autumn', 'winter'):
+            return _bad('계절을 선택해 주세요.')
+        with transaction.atomic():
+            user = type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            progress, _ = GardenProgress.objects.select_for_update().get_or_create(user=user)
+            owned = set(progress.owned_themes) | {'spring'}
+            if theme not in owned:
+                if user.points < 40:
+                    return _bad('배경 구매에 40P가 필요해요.')
+                user.points -= 40
+                user.save(update_fields=['points'])
+                owned.add(theme)
+            progress.theme = theme
+            progress.owned_themes = sorted(owned)
+            progress.save(update_fields=['theme', 'owned_themes'])
+        return Response(garden_state(user, '계절 배경을 적용했어요.'))

@@ -98,15 +98,17 @@ class FriendsView(APIView):
         for friend in friends:
             progress_by_user.setdefault(friend.id, None)
         plot_counts = {friend.id: plot_count_for_level(progress_by_user[friend.id].level if progress_by_user[friend.id] else 1) for friend in friends}
-        allowed_by_user = {friend.id: set(unlocked_slot_indexes(grid_size_for_level(progress_by_user[friend.id].level if progress_by_user[friend.id] else 1))) for friend in friends}
+        allowed_by_user = {friend.id: set(unlocked_slot_indexes(5, progress_by_user[friend.id].level if progress_by_user[friend.id] else 1)) for friend in friends}
         for plot in plots:
+            if plot.seed_type_id or plot.photo:
+                allowed_by_user[plot.user_id].add(plot.slot_index)
             if plot.slot_index in allowed_by_user[plot.user_id] and plot.seed_type_id and not plot.death_reason:
                 by_user[plot.user_id][plot.slot_index] = plot.growth_stage
                 types[plot.user_id][plot.slot_index] = plot.seed_type.key
         today = timezone.localdate()
         cheered = set(FriendCheer.objects.filter(user=request.user, date=today).values_list('friend_id', flat=True))
         return Response([{'id': f.id, 'n': f.username, 'e': '🌱', 'code': f.friend_code,
-                          'plots': by_user[f.id], 'types': types[f.id], 'plot_count': plot_counts[f.id],
+                          'plots': by_user[f.id], 'types': types[f.id], 'plot_count': len(allowed_by_user[f.id]), 'unlocked_slots': sorted(allowed_by_user[f.id]),
                           'garden_level': progress_by_user[f.id].level if progress_by_user[f.id] else 1, 'ch': f.id in cheered}
                          for f in friends])
 
@@ -168,3 +170,18 @@ class AttendanceView(APIView):
         data = UserSerializer(request.user).data
         data.update({'detail': f"🎁 {result['day']}일차 출석! +{result['reward']}P{extra}", **result})
         return Response(data)
+
+
+class TutorialStartView(APIView):
+    """Atomically claim the one-time tutorial for the authenticated account.
+
+    Mark at first display, not at completion: refreshing, skipping, or signing
+    in on another device must not automatically replay the tutorial.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        changed = User.objects.filter(pk=request.user.pk, tutorial_seen_at__isnull=True).update(
+            tutorial_seen_at=timezone.now(),
+        )
+        return Response({'show_tutorial': changed == 1})
