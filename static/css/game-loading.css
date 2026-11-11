@@ -1,0 +1,33 @@
+/* 초록정원 · 글꼴 지정·3D 상자·미니게임·로딩 화면·폼
+   (index.html에서 분리한 파일 · 순서 유지 필요) */
+.logo,h3,.tri span,.btn,.price,.f,.chip,nav button,.mc b,.item b,.gm b{font-family:"Jua","Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+.gb{position:relative;height:250px;background:linear-gradient(180deg,var(--sky),var(--bg));overflow:hidden}
+.gb canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.gb.tall{height:340px;border-radius:24px;border:3px solid var(--tx)}
+.btn,.tri button,.price,.ctl button{box-shadow:0 4px 0 rgba(0,0,0,.22)}
+.btn:active:not(:disabled),.tri button:active,.ctl button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.22)}
+.mc{border-bottom-width:4px}.tri button{border-bottom-width:1.5px}
+.gcv{display:block;margin:12px auto 0;width:min(100%,240px);height:auto;image-rendering:pixelated;border:4px solid var(--tx);border-radius:8px;touch-action:none}
+.ctl{display:flex;gap:10px;justify-content:center;margin-top:14px}
+.ctl button{flex:1;max-width:76px;font-size:22px;padding:12px 0;background:var(--g);color:#fff;border-radius:14px;touch-action:none;user-select:none}
+.tri{grid-template-columns:1fr 1fr}.gb.home{height:max(340px,54dvh)}.chip.att{background:var(--card);cursor:pointer;font-size:12px;padding:5px 10px}.chip.att.new{background:var(--y);border-color:var(--y);color:#4A3600;animation:ping 1.6s infinite}#ld{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;color:#23402F;background:linear-gradient(180deg,#DFF1F8 0 74%,#5CBF74 74% 78%,#8B6B4A 78%);transition:opacity .4s;font-family:"Jua","Apple SD Gothic Neo",sans-serif}
+#ld.out{opacity:0;pointer-events:none}
+.ldb{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:-6%}
+.ldt{font-size:34px;color:#2E7D5B;text-shadow:3px 3px 0 #23402F}
+#ld canvas{width:160px;height:160px;image-rendering:pixelated}
+#lt{font-size:16px;letter-spacing:2px;min-width:110px}
+#lb{display:flex;gap:3px;padding:4px;border:4px solid #23402F;background:#fff;width:230px}
+#lb i{flex:1;height:14px;background:#DDE8D3}#lb i.on{background:#4CAF7D}
+#lp{font-size:14px;color:#3B5A48;min-height:20px}
+.pc{position:absolute;width:16px;height:16px;background:#fff;box-shadow:16px 0 #fff,32px 0 #fff,48px 0 #fff,16px -16px #fff,32px -16px #fff;animation:drift 9s linear infinite}
+.c1{top:12%;left:-60px}.c2{top:26%;left:-60px;animation-delay:-4.5s;transform:scale(.7)}
+@keyframes drift{to{left:110%}}
+.add{display:flex;gap:8px;margin-bottom:8px}.add input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:14px;padding:0 14px;font:inherit;background:var(--card);color:var(--tx)}.add .btn{width:auto;margin:0;padding:12px 16px}nav button{font-size:10.5px}.seedrow{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 2px}.sd{background:var(--bg);border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px}.sd span{font-size:20px}.sd em{font-style:normal;color:var(--sub)}.fld{display:block;width:100%;min-height:46px;border:1.5px solid var(--line);border-radius:14px;padding:0 14px;font:inherit;background:var(--card);color:var(--tx);margin-bottom:8px}.row2{display:flex;justify-content:space-between;align-items:center;gap:10px}
+/* 홈 화면은 남는 높이를 정원 미리보기에 배분해 미션 아래 빈 공간을 줄여요. */
+main.home-screen{display:flex;flex-direction:column;min-height:0}
+.home-layout{flex:1;min-height:100%;display:flex;flex-direction:column;gap:10px}
+.home-scene{flex:1 1 auto;min-height:200px;display:flex;flex-direction:column}
+.gb.home{height:auto;flex:1 1 0;min-height:180px}
+.home-actions{flex:none;margin-top:0}
+.home-mission{flex:none}
+.home-mission h3{margin-top:2px}
