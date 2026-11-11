@@ -4,13 +4,12 @@
 /* ---- 서버 연동 끝 ---- */
 
 const mc=m=>`<button class="mc ${m.completed?'dn':''}" style="--c:var(${CC[m.category]})" onclick="openM(${m.id})"><div class="ic">${m.emoji}</div><div><span class="tag">${CL[m.category]}${m.mission_type=='quiz'?' · 퀴즈':m.mission_type=='record'?' · 관찰기록':' · 사진'}${m.ai_assisted?' · AI 확인':''}</span><b>${m.title}</b></div><span class="rw">${m.completed?'완료 ✓':'⭐ +'+m.reward_points}</span></button>`;
-function weeklyMissionCard(){const w=S.weekly;if(!w)return '<section class="panel weekly-goal"><b>📅 주간 미션</b><div class="sub">이번 주 목표를 불러오는 중이에요…</div></section>';const pct=Math.min(100,Math.round((w.completed||0)/Math.max(1,w.required||7)*100)),label=w.claimed?'이번 주 보상 완료':w.eligible?'⭐ +80P 받기':'목표 달성 후 +80P 받기';return `<section class="panel weekly-goal"><b>📅 주간 미션</b><div class="sub">이번 주 완료 ${w.completed}/${w.required}</div><div class="bar"><i style="width:${pct}%"></i></div><div class="sub">주간 목표를 달성하면 별 포인트 +80P</div><button class="btn y" ${w.eligible&&!w.claimed?'':'disabled'} onclick="claimWeeklyGoal()">${label}</button></section>`}
 const V={
 home(){if(S.guest)return guestHome();return `<div class="home-layout"><section class="scene home-scene"><div class="gb home" id="gbox"></div></section>
 <div class="tri home-actions"><button onclick="go('garden')">🌱<span>정원으로 가기</span></button><button onclick="go('mission')">🗺️<span>미션하러 가기</span></button></div>
 <section class="home-mission"><h3>오늘의 미션 <small>🌿</small></h3>${S.missions[0]?mc(S.missions[0]):'<div class="sub">미션을 불러오는 중이에요…</div>'}</section></div>`},
 mission(){const l=S.missions.filter(m=>S.fl=='전체'||CL[m.category]==S.fl);
-return `${S.fl=='전체'?weeklyMissionCard():''}<div class="chipsrow">${['전체','관찰','미생물','생물'].map(f=>`<button class="f ${S.fl==f?'on':''}" onclick="S.fl='${f}';R()">${f}</button>`).join('')}</div>${l.map(mc).join('')}`},
+return `<div class="chipsrow">${['전체','관찰','미생물','생물'].map(f=>`<button class="f ${S.fl==f?'on':''}" onclick="S.fl='${f}';R()">${f}</button>`).join('')}</div>${l.map(mc).join('')}`},
 game(){const g=[['🗑️','쓰레기 피하기','🌱 식물이 쓰레기를 피해요'],['🧱','테트리스','줄을 채워 지워요']];
 return `${backMy()}<div class="sub" style="margin:4px 2px 10px">미션을 완료하면 티켓을 받아요 · 보유 🎟️ ${S.tk}</div>${g.map(([e,n,d])=>`<div class="gm"><div class="ic">${e}</div><div><b>${n}</b><span class="sub">${d}</span></div><button class="btn y" onclick="play('${n}')">🎟️ 1 플레이</button></div>`).join('')}<div class="gm soon"><div class="ic">🐞</div><b>같은 생물 찾기</b><span class="sub" style="margin-left:auto">준비 중</span></div>`}};
 function R(){const g=S.guest;
