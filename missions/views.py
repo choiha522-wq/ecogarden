@@ -1,5 +1,6 @@
 import math
 import random
+import base64
 from io import BytesIO
 import logging
 
@@ -14,9 +15,9 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .learning import learning_card
+from .learning import learning_card, quiz_curriculum, user_garden_level
 from .daily import ensure_daily
-from .models import Mission, MissionSubmission, ObservationEntry, ObservationJournal
+from .models import FinalPracticeEntry, Mission, MissionSubmission, ObservationEntry, ObservationJournal
 from .serializers import MissionSerializer
 from .services import verify_mission_photo
 
@@ -109,7 +110,8 @@ class MissionSubmitView(APIView):
                 submission.save(update_fields=['ai_label'])
                 return Response({'detail': f'사진이 미션과 맞지 않는 것 같아요. {ai_message}'.strip()}, status=400)
             submission.approved = True
-            submission.save(update_fields=['ai_label', 'approved'])
+            submission.photo_data = image_bytes
+            submission.save(update_fields=['ai_label', 'approved', 'photo_data'])
             grant_reward(user, mission)
         request.user.points, request.user.tickets = user.points, user.tickets
         request.user.water_drops, request.user.sunlight = user.water_drops, user.sunlight
@@ -125,14 +127,38 @@ class MissionSubmitView(APIView):
         })
 
 
+class PhotoGalleryView(APIView):
+    """로그인한 사용자의 승인된 사진 미션만 갤러리에 반환해요."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            offset = max(0, int(request.query_params.get('offset', 0)))
+        except (TypeError, ValueError):
+            return Response({'detail': '사진 목록 위치가 올바르지 않아요.'}, status=400)
+        query = (MissionSubmission.objects
+                 .filter(user=request.user, mission__mission_type='photo', approved=True)
+                 .exclude(photo_data__isnull=True)
+                 .select_related('mission')
+                 .order_by('-submitted_at'))
+        submissions = list(query[offset:offset + 30])
+        return Response({'items': [{
+            'id': item.pk,
+            'mission': item.mission.title,
+            'date': item.date.isoformat(),
+            'ai_label': item.ai_label,
+            'image': 'data:image/jpeg;base64,' + base64.b64encode(bytes(item.photo_data)).decode('ascii'),
+        } for item in submissions], 'next_offset': offset + len(submissions) if len(submissions) == 30 else None})
+
+
 def _prepare_mission_image(upload):
     """파일 크기와 실제 이미지 형식을 확인한 뒤 AI에 보낼 JPEG로 정규화해요."""
     if upload.size > 12 * 1024 * 1024:
         raise ValueError('사진이 너무 커요.')
     image = ImageOps.exif_transpose(Image.open(upload)).convert('RGB')
-    image.thumbnail((1280, 1280))
+    image.thumbnail((960, 960))
     buffer = BytesIO()
-    image.save(buffer, format='JPEG', quality=88, optimize=True)
+    image.save(buffer, format='JPEG', quality=82, optimize=True)
     return buffer.getvalue()
 
 
@@ -255,7 +281,8 @@ class QuizDetailView(APIView):
 
     def get(self, request, mission_id):
         mission = todays_mission(request.user, mission_id, mission_type='quiz')
-        questions = list(mission.questions.all())
+        from .quiz_rotation import selected_questions
+        questions = selected_questions(request.user, mission, create=True)
         if not questions:
             return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)
         # 정답 위치가 특정 번호에 몰리지 않도록 한 퀴즈 안에서 정답 위치를 분산해요.
@@ -279,11 +306,13 @@ class QuizDetailView(APIView):
                 # 브라우저에서 고른 표시 순번을 서버의 원래 보기 순번으로 변환할 때 사용해요.
                 'choice_indexes': order,
             })
+        curriculum = quiz_curriculum(user_garden_level(request.user))
         return Response({
             'id': mission.id,
             'title': mission.title,
             'need': needed_to_pass(len(questions)),
             'questions': randomized,
+            'curriculum': curriculum,
         })
 
 
@@ -296,7 +325,8 @@ class QuizSubmitView(APIView):
 
     def post(self, request, mission_id):
         mission = todays_mission(request.user, mission_id, mission_type='quiz')
-        questions = list(mission.questions.all())
+        from .quiz_rotation import selected_questions
+        questions = selected_questions(request.user, mission)
         if not questions:
             return Response({'detail': '아직 준비 중인 퀴즈예요.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -381,3 +411,49 @@ class WeeklyGoalView(APIView):
             user.save(update_fields=['points'])
             state['claimed'] = True
         return Response({**state, 'points': user.points, 'detail': '주간 목표 달성! +80P'})
+
+
+class FinalPracticeView(APIView):
+    """레벨 10 최종 실천 미션을 개인 계정에 저장해요."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _level_check(self, user):
+        if user_garden_level(user) < 10:
+            return Response({'detail': '정원 레벨 10에서 열리는 최종 실천 미션이에요.'}, status=403)
+        return None
+
+    def _entry(self, entry):
+        if entry is None:
+            return None
+        return {'planned_action': entry.planned_action, 'action_taken': entry.action_taken,
+                'reflection': entry.reflection, 'completed_at': entry.completed_at.isoformat()}
+
+    def get(self, request):
+        error = self._level_check(request.user)
+        if error:
+            return error
+        entry = FinalPracticeEntry.objects.filter(user=request.user).first()
+        return Response({'entry': self._entry(entry)})
+
+    def post(self, request):
+        error = self._level_check(request.user)
+        if error:
+            return error
+        fields = {}
+        for key, title, limit in (
+            ('planned_action', '실천 계획', 300),
+            ('action_taken', '실천 내용', 500),
+            ('reflection', '느낀 점', 800),
+        ):
+            value = request.data.get(key, '')
+            if not isinstance(value, str):
+                return Response({'detail': f'{title}을(를) 글로 작성해 주세요.'}, status=400)
+            value = ' '.join(value.split())
+            minimum = 1 if key == 'planned_action' else 15
+            if len(value) < minimum:
+                return Response({'detail': f'{title}을(를) {minimum}자 이상 작성해 주세요.'}, status=400)
+            if len(value) > limit:
+                return Response({'detail': f'{title}은(는) {limit}자 이내로 작성해 주세요.'}, status=400)
+            fields[key] = value
+        entry, _ = FinalPracticeEntry.objects.update_or_create(user=request.user, defaults=fields)
+        return Response({'entry': self._entry(entry), 'detail': '최종 실천 미션 기록을 저장했어요.'})

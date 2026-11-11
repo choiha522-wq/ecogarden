@@ -6,6 +6,8 @@ from .models import DailyMission, Mission, MissionSubmission, ObservationEntry, 
 class QuizQuestionInline(admin.StackedInline):
     model = QuizQuestion
     extra = 0
+    fields = ('difficulty_level', 'order', 'text', 'choice1', 'choice2', 'choice3', 'choice4', 'answer', 'explanation')
+    ordering = ('difficulty_level', 'order', 'id')
 
 
 @admin.register(Mission)

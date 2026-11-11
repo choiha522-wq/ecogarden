@@ -31,10 +31,28 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
     def patch(self, request):
-        """마이페이지에서 지역/학교급 수정."""
+        """마이페이지의 아이디·좋아하는 계절·칭호·프로필 이미지를 수정해요."""
+        old_season = request.user.favorite_season
         ser = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
-        ser.save()
+        user = ser.save()
+        from garden.models import GardenProgress
+        progress, _ = GardenProgress.objects.get_or_create(user=user)
+        owned = set(progress.owned_themes or [])
+        changed = False
+        if user.favorite_season != old_season:
+            owned.update((old_season, user.favorite_season))
+            progress.theme = user.favorite_season
+            changed = True
+        # 예전 버전에서 선호 계절만 바뀌고 소유 목록이 갱신되지 않은 계정도 보정해요.
+        if user.favorite_season not in owned:
+            owned.add(user.favorite_season)
+            changed = True
+        if sorted(owned) != sorted(progress.owned_themes or []):
+            progress.owned_themes = sorted(owned)
+            changed = True
+        if changed:
+            progress.save(update_fields=['owned_themes', 'theme'])
         return Response(UserSerializer(request.user).data)
 
 

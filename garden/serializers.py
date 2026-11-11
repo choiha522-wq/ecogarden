@@ -23,7 +23,7 @@ class SeedTypeSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if self.context.get('catalog'):
-            unlocked = instance.unlock_level <= 1 or instance.key in self.context.get('collected_keys', set())
+            unlocked = instance.unlock_level <= self.context.get('garden_level', 1)
             data['collected'] = instance.key in self.context.get('collected_keys', set())
             data['encyclopedia_unlocked'] = unlocked
             if not unlocked:

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import (DigPlotView, FeedPlotView, GardenListView, MicrobePlotView, PlantPhotoView,
+from .views import (DigPlotView, FeedPlotView, GardenListView, MicrobePlotView,
                     HarvestPlotView, GardenStyleView, PlantSeedView, SeedInventoryView, SpeciesListView, SunlightPlotView, WaterPlotView)
 
 urlpatterns = [
@@ -14,6 +14,5 @@ urlpatterns = [
     path('<int:slot_index>/sunlight/', SunlightPlotView.as_view(), name='plot-sunlight'),
     path('<int:slot_index>/feed/', FeedPlotView.as_view(), name='plot-feed'),
     path('<int:slot_index>/microbes/', MicrobePlotView.as_view(), name='plot-microbes'),
-    path('<int:slot_index>/plant-photo/', PlantPhotoView.as_view(), name='plot-plant-photo'),
     path('<int:slot_index>/dig/', DigPlotView.as_view(), name='plot-dig'),
 ]

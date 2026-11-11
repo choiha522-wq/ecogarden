@@ -54,7 +54,6 @@ WATER_CAP = 10             # 시간이 지나 저절로 모이는 물방울의 �
 WATER_REFILL_MINUTES = 30  # 물방울이 1개씩 모이는 간격 (빗물 모으기)
 SUN_BOOST_AMOUNT = 50      # 햇빛 조각 1개가 더해주는 햇빛
 SUN_BOOST_DECAY = 2.5      # 매 스텝 줄어드는 '더해준 햇빛'
-PHOTO_PLANT_DAILY = 3      # 사진으로 식물 심기 하루 횟수
 
 # 종별 특성 (species_data.py의 water/sun/soil 값 3이 '보통'이에요)
 FLOWER_ABSORB_PER_STAGE = 0.03   # 꽃은 나무보다 탄소를 훨씬 적게 흡수해요
@@ -62,8 +61,8 @@ FLOWER_GROWTH = 1.5              # 꽃은 나무보다 빨리 자라요
 POLLINATION_PER_SPECIES = 0.08   # 활짝 핀 꽃 '종류' 1개당 정원 전체 성장 보너스 (같은 꽃을 여러 개 심어도 1번만 세요)
 POLLINATION_CAP = 0.32           # 보너스 최대치 (+32%)
 
-MAX_PLOT_COUNT = 25
-GRID_STRIDE = 5
+MAX_PLOT_COUNT = 49
+GRID_STRIDE = 7
 # ===========================================================================
 
 
@@ -112,7 +111,7 @@ def sun_levels(plots, size=3):
                 if dr == 0 and dc == 0:
                     continue
                 rr, cc = r + dr, c + dc
-                if 0 <= rr < size and 0 <= cc < size:
+                if 0 <= rr < GRID_STRIDE and 0 <= cc < GRID_STRIDE:
                     n = by_slot.get(rr * GRID_STRIDE + cc)
                     if n and _is_living_tree(n) and n.growth_stage >= 3:
                         big += 1
@@ -272,10 +271,3 @@ def refill_water(user, now=None):
     user.water_drops = min(WATER_CAP, user.water_drops + n)
     user.water_refill_at = None if user.water_drops >= WATER_CAP else user.water_refill_at + interval * n
     user.save(update_fields=['water_drops', 'water_refill_at'])
-
-
-def photo_plants_left(user):
-    """오늘 사진으로 식물을 더 심을 수 있는 횟수."""
-    if user.photo_plant_date != timezone.localdate():
-        return PHOTO_PLANT_DAILY
-    return max(0, PHOTO_PLANT_DAILY - user.photo_plant_count)

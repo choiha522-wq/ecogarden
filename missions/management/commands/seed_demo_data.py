@@ -8,28 +8,27 @@ from shop.models import ShopItem
 # (카테고리, 제목, 이모지, 설명, 포인트, AI검증, 종류)
 MISSIONS = [
     # --- 사진 인증형 (안전하게, 만지거나 꺾지 않고 멀리서 관찰해요) ---
-    ('observation', '우리 동네 식물 3종 찍기', '📸', '공원이나 화단에서 서로 다른 식물 3종류를 찍으면 AI가 이름을 알려줘요.', 30, True, 'photo'),
-    ('observation', '곤충 한 마리 발견하기', '🐝', '꽃 근처를 살펴보세요. 만지지 말고 멀리서 찍어요.', 30, False, 'photo'),
-    ('local', '도시 숲 탐험하기', '🌳', '우리 동네 도시 생태 미션이에요. 학교나 공원의 큰 나무를 찍어요.', 40, False, 'photo'),
-    ('observation', '잎맥이 보이는 나뭇잎 찾기', '🍃', '살아있는 잎은 뜯지 말고, 떨어진 잎이나 잎 뒷면의 줄무늬(잎맥)가 잘 보이게 찍어요.', 30, True, 'photo'),
-    ('observation', '이끼 발견하기', '🌿', '그늘지고 촉촉한 곳의 이끼를 찾아보세요. 만지지 말고 가까이에서 살짝 찍어요.', 30, True, 'photo'),
-    ('observation', '꽃에 앉은 벌이나 나비 찾기', '🦋', '꽃에 온 벌이나 나비를 멀리서 조용히 찍어요. 손으로 잡으면 안 돼요.', 40, True, 'photo'),
-    ('observation', '떨어진 낙엽 3종류 찍기', '🍂', '서로 다른 모양의 낙엽을 한곳에 모아 한 장에 담아 찍어요.', 30, True, 'photo'),
-    ('microbe', '화단 흙 관찰하기', '🪱', '화단이나 화분의 흙을 가까이에서 찍어요. 색깔, 알갱이, 작은 생물이 있는지 살펴봐요.', 30, False, 'photo'),
-    ('local', '나무 열매나 씨앗 찾기', '🌰', '나무에 달린 열매나 땅에 떨어진 씨앗을 찾아 찍어요. 먹지는 않아요!', 30, True, 'photo'),
-    ('local', '그늘과 햇빛 비교하기', '☀️', '같은 풀이 그늘에 있을 때와 햇빛 아래 있을 때 어떻게 다른지 두 곳을 찍어요.', 30, False, 'photo'),
-    ('local', '학교 화단 새싹 찾기', '🌱', '화단이나 화분에서 막 올라온 새싹을 찾아 찍어요.', 30, True, 'photo'),
-    ('observation', '내 키보다 큰 나무 찾기', '🌲', '나무 옆에서 나무 전체가 보이도록 멀리서 찍어요. 나무에 올라가면 안 돼요.', 30, True, 'photo'),
+    ('observation', '우리 동네 식물 3종 찍기', '📸', '공원이나 화단에서 서로 다른 식물 3종류를 찍으면 AI가 이름을 알려줘요.', 40, True, 'photo'),
+    ('observation', '곤충 한 마리 발견하기', '🐝', '꽃 근처를 살펴보세요. 만지지 말고 멀리서 찍어요.', 40, False, 'photo'),
+    ('biology', '도시 숲 탐험하기', '🌳', '숲에서 서로 다른 나무와 주변 식물을 관찰하고, 큰 나무를 찍어요.', 50, False, 'photo'),
+    ('observation', '잎맥이 보이는 나뭇잎 찾기', '🍃', '살아있는 잎은 뜯지 말고, 떨어진 잎이나 잎 뒷면의 줄무늬(잎맥)가 잘 보이게 찍어요.', 40, True, 'photo'),
+    ('observation', '이끼 발견하기', '🌿', '그늘지고 촉촉한 곳의 이끼를 찾아보세요. 만지지 말고 가까이에서 살짝 찍어요.', 40, True, 'photo'),
+    ('observation', '꽃에 앉은 벌이나 나비 찾기', '🦋', '꽃에 온 벌이나 나비를 멀리서 조용히 찍어요. 손으로 잡으면 안 돼요.', 50, True, 'photo'),
+    ('observation', '떨어진 낙엽 3종류 찍기', '🍂', '서로 다른 모양의 낙엽을 한곳에 모아 한 장에 담아 찍어요.', 40, True, 'photo'),
+    ('microbe', '화단 흙 관찰하기', '🪱', '화단이나 화분의 흙을 가까이에서 찍어요. 색깔, 알갱이, 작은 생물이 있는지 살펴봐요.', 40, False, 'photo'),
+    ('biology', '나무 열매나 씨앗 찾기', '🌰', '나무에 달린 열매나 땅에 떨어진 씨앗을 찾아 찍어요. 먹지는 않아요!', 40, True, 'photo'),
+    ('biology', '그늘과 햇빛 비교하기', '☀️', '같은 식물이 그늘과 햇빛에서 잎의 모양이나 색이 어떻게 다른지 찍어요.', 40, False, 'photo'),
+    ('biology', '학교 화단 새싹 찾기', '🌱', '화단이나 화분에서 막 올라온 새싹을 찾아 찍어요.', 40, True, 'photo'),
+    ('observation', '내 키보다 큰 나무 찾기', '🌲', '나무 옆에서 나무 전체가 보이도록 멀리서 찍어요. 나무에 올라가면 안 돼요.', 40, True, 'photo'),
     # --- 퀴즈형 ---
-    ('microbe', '낙엽은 어떻게 사라질까?', '🦠', '낙엽 분해 과정을 배우고 퀴즈를 풀어요.', 20, False, 'quiz'),
-    ('microbe', '흙 속 미생물 퀴즈', '🧫', '미생물과 식물의 관계를 알아봐요.', 20, False, 'quiz'),
-    ('observation', '꽃과 곤충의 관계', '🌼', '꽃가루받이가 무엇인지 알아보는 퀴즈예요.', 20, False, 'quiz'),
-    ('observation', '나무가 하는 일', '🌳', '나무의 광합성과 탄소 흡수를 알아보는 퀴즈예요.', 20, False, 'quiz'),
-    ('local', '숲속 먹이사슬', '🐿️', '생산자, 소비자, 분해자를 알아보는 퀴즈예요.', 20, False, 'quiz'),
-    ('local', '생물다양성이란?', '🌈', '다양한 생물이 함께 사는 것이 왜 중요한지 알아봐요.', 20, False, 'quiz'),
-    ('microbe', '흙 속 친구, 지렁이', '🪱', '지렁이가 흙을 어떻게 건강하게 만드는지 알아봐요.', 20, False, 'quiz'),
-    ('local', '탄소와 우리 동네 나무', '🌍', '이산화탄소와 나무의 관계를 알아보는 퀴즈예요.', 20, False, 'quiz'),
-    ('observation', '나의 식물 관찰일지', '📓', '현실에서 직접 키우는 식물 한 종을 정해 매일 살펴봐요. 오늘 돌본 내용이나 어제와 달라진 점을 기록해 마이페이지에서 모아 봐요.', 25, False, 'record'),
+    ('microbe', '낙엽은 어떻게 사라질까?', '🦠', '낙엽 분해 과정을 배우고 퀴즈를 풀어요.', 30, False, 'quiz'),
+    ('microbe', '흙 속 미생물 퀴즈', '🧫', '미생물과 식물의 관계를 알아봐요.', 30, False, 'quiz'),
+    ('observation', '꽃과 곤충의 관계', '🌼', '꽃가루받이가 무엇인지 알아보는 퀴즈예요.', 30, False, 'quiz'),
+    ('observation', '나무가 하는 일', '🌳', '나무의 광합성과 탄소 흡수를 알아보는 퀴즈예요.', 30, False, 'quiz'),
+    ('biology', '숲속 먹이사슬', '🐿️', '생산자, 소비자, 분해자의 관계를 알아보는 퀴즈예요.', 30, False, 'quiz'),
+    ('biology', '생물다양성이란?', '🌈', '다양한 생물이 서로 어떤 영향을 주고받는지 알아봐요.', 30, False, 'quiz'),
+    ('microbe', '흙 속 친구, 지렁이', '🪱', '지렁이가 흙을 어떻게 건강하게 만드는지 알아봐요.', 30, False, 'quiz'),
+    ('biology', '식물과 탄소 순환', '🌍', '식물과 생태계의 탄소 순환을 알아보는 퀴즈예요.', 30, False, 'quiz'),
 ]
 
 # 제목 -> [(문제, [보기...], 정답번호(1부터), 해설)]
@@ -111,7 +110,7 @@ QUIZZES = {
          ['촉촉하고 어두운 흙', '뜨겁고 바싹 마른 모래', '햇볕이 쨍쨍한 아스팔트', '얼음 위'], 1,
          '지렁이는 피부로 숨을 쉬어서 촉촉하고 어두운 흙을 좋아해요.'),
     ],
-    '탄소와 우리 동네 나무': [
+    '식물과 탄소 순환': [
         ('공기 중 이산화탄소가 너무 많아지면 지구에는 어떤 일이 생길까?',
          ['지구가 점점 더워져요', '지구가 점점 얼어요', '달이 커져요', '바다가 사라져요'], 1,
          '이산화탄소는 지구의 열을 가두는 온실가스라서 많아지면 지구가 더워져요.'),
@@ -131,16 +130,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # 나무·꽃 씨앗 (garden/species_data.py). 다시 실행하면 종 정보는 최신으로 갱신되지만,
         # 상점 가격은 이미 있는 항목이면 그대로 둬요.
-        unlock_levels = {}
-        for tier in (1, 2, 3):
-            for kind in ('tree', 'flower'):
-                group = [sp for sp in SPECIES if min(sp['difficulty'], 3) == tier and sp['kind'] == kind]
-                base_level = {1: 1, 2: 2, 3: 3}[tier]
-                for index, sp in enumerate(group):
-                    unlock_levels[sp['key']] = base_level + index // 3
         for sp in SPECIES:
             fields = {k: v for k, v in sp.items() if k != 'key'}
-            fields['unlock_level'] = unlock_levels[sp['key']]
             seed, _ = SeedType.objects.update_or_create(key=sp['key'], defaults=fields)
             item, created = ShopItem.objects.get_or_create(
                 item_type='seed', seed_type=seed,
@@ -173,13 +164,7 @@ class Command(BaseCommand):
             if type_changed:
                 mission.mission_type = mtype
                 mission.requires_photo = (mtype == 'photo')
-            if title == '나의 식물 관찰일지':
-                mission.description = desc
-                mission.category = category
-                mission.emoji = emoji
-                mission.is_active = True
-                mission.save(update_fields=['mission_type', 'requires_photo', 'description', 'category', 'emoji', 'is_active'])
-            elif type_changed:
+            if type_changed:
                 mission.save()
 
             if mtype == 'quiz' and not mission.questions.exists():
@@ -213,6 +198,7 @@ class Command(BaseCommand):
             defaults=dict(description='미니게임 1회', price=40),
         )
 
+        Mission.objects.filter(mission_type='record').update(is_active=False)
         self.stdout.write(self.style.SUCCESS('데모 데이터 생성 완료'))
 
 

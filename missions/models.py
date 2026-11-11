@@ -8,7 +8,7 @@ class Mission(models.Model):
     CATEGORY_CHOICES = [
         ('observation', '관찰'),
         ('microbe', '미생물'),
-        ('local', '지역'),
+        ('biology', '생물'),
     ]
     # 미션 종류. 새 종류(예: 관찰 일지)를 만들 땐 여기에 한 줄 추가하고 views.py에 처리만 붙이면 돼요.
     TYPE_CHOICES = [
@@ -22,7 +22,7 @@ class Mission(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     mission_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='photo')
     emoji = models.CharField(max_length=8, default='🌱')
-    reward_points = models.PositiveIntegerField(default=20)
+    reward_points = models.PositiveIntegerField(default=30)
     reward_tickets = models.PositiveIntegerField(default=1)
     reward_water = models.PositiveIntegerField(default=1)      # 보상으로 주는 물방울
     reward_sunlight = models.PositiveIntegerField(default=0)   # 보상으로 주는 햇빛 조각 (사진 미션: 밖에 나가 햇빛을 쬔 보상!)
@@ -54,7 +54,9 @@ class DailyMission(models.Model):
 
 class QuizQuestion(models.Model):
     """퀴즈 미션에 딸린 문제. 관리자 페이지에서 미션 화면 아래에 바로 추가할 수 있어요."""
+    DIFFICULTY_CHOICES = [(1, '하'), (2, '중'), (3, '상'), (4, '최상')]
     mission = models.ForeignKey(Mission, on_delete=models.CASCADE, related_name='questions')
+    difficulty_level = models.PositiveSmallIntegerField('퀴즈 난이도', choices=DIFFICULTY_CHOICES, default=1)
     order = models.PositiveSmallIntegerField(default=0)
     text = models.CharField('문제', max_length=200)
     choice1 = models.CharField('보기 1', max_length=100)
@@ -82,12 +84,13 @@ class QuizQuestion(models.Model):
 class MissionSubmission(models.Model):
     """
     학생의 미션 수행 기록.
-    - 사진 인증은 사진을 메모리에서 정규화·검증하며 업로드 원본은 저장하지 않아요.
+    - 승인된 사진 인증은 정규화한 이미지를 개인 갤러리용으로 저장해요.
     - 퀴즈는 기준 점수 이상, 관찰 기록은 글자 수 기준을 통과하면 approved예요.
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='mission_submissions')
     mission = models.ForeignKey(Mission, on_delete=models.CASCADE, related_name='submissions')
     photo = models.ImageField(upload_to='mission_photos/', blank=True, null=True)
+    photo_data = models.BinaryField(blank=True, null=True, help_text='승인된 미션 사진을 압축해 개인 갤러리용으로 보관해요.')
     ai_label = models.CharField(max_length=100, blank=True, help_text='AI가 인식한 식물/곤충 이름 등')
     observation_region = models.CharField(max_length=10, blank=True)
     observation_habitat = models.CharField(max_length=20, blank=True, choices=[('garden', '정원/화분'), ('school', '학교'), ('park', '공원/화단'), ('forest', '숲'), ('other', '기타')])
@@ -122,3 +125,28 @@ class ObservationEntry(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=('journal', 'date'), name='unique_daily_observation_entry')]
         ordering = ['-date', '-id']
+
+
+class QuizHistory(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    category = models.CharField(max_length=30)
+    seen_texts = models.JSONField(default=list)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'category'], name='unique_quiz_history')]
+
+class QuizDraw(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    mission = models.ForeignKey(Mission, on_delete=models.CASCADE)
+    date = models.DateField(default=timezone.localdate)
+    question_ids = models.JSONField(default=list)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'mission', 'date'], name='unique_quiz_draw')]
+
+
+class FinalPracticeEntry(models.Model):
+    """정원 레벨 10의 생태계 보호 실천 계획과 돌아보기 기록."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='final_practice_entry')
+    planned_action = models.CharField(max_length=300)
+    action_taken = models.CharField(max_length=500)
+    reflection = models.CharField(max_length=800)
+    completed_at = models.DateTimeField(auto_now=True)

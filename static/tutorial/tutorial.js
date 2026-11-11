@@ -1,53 +1,38 @@
-'use strict';
-const Tutorial={active:false,index:0,returnTab:'home',focus:null,target:null,observer:null,frame:0,timer:0};
+/* 초록정원 · 화면을 눌러 진행하는 단계별 이용 안내 */
+const Tutorial={active:false,index:0,returnTab:'home',focus:null,target:null,observer:null,frame:0};
 const tutorialSteps=[
- ['home','garden','정원 버튼을 눌러 보세요','실제 버튼을 누르면 정원으로 이동해요. 식물을 돌보고, 다 자란 식물을 수확하면 20P와 수확 기록을 얻어요.'],
- ['garden','mission','미션으로 이동해 보세요','미션 버튼을 눌러 환경 실천을 둘러보세요. 미션 후 생태 지식을 읽고, 주간 미션 7개와 미션 보상 150P를 달성하면 80P를 받아요.'],
- ['mission','shop','상점을 열어 보세요','상점 버튼을 누르세요. 씨앗은 정원 레벨로 해금돼요. 이 안내에서는 구매하거나 포인트를 사용하지 않아요.'],
- ['shop','encyclopedia','식물 도감을 열어 보세요','도감 버튼을 누르세요. 레벨 1 식물은 기본 공개되고, 나머지는 수집하면 상세 정보가 열려요.'],
- ['encyclopedia','my','마이페이지로 이동해 보세요','마이페이지 버튼을 누르세요. 수확 성과와 친구 코드, 튜토리얼 다시 보기를 확인할 수 있어요.'],
- ['my','friends','친구 버튼을 눌러 보세요','마이페이지 안의 친구 버튼을 누르세요. 친구를 추가하거나 응원하는 동작은 지금 실행하지 않아요.'],
- ['friends','my','마이페이지로 돌아가세요','강조된 마이페이지 버튼을 누르면 다음으로 미니게임 메뉴를 찾아볼게요.'],
- ['my','game','미니게임 메뉴를 열어 보세요','미니게임 버튼을 누르세요. 쓰레기 피하기와 테트리스 안내를 볼 수 있어요. 게임 시작이나 티켓 사용은 하지 않아요.'],
- ['game','my','마이페이지로 돌아오면 완료예요','마이페이지에서 「이용 방법 · 튜토리얼 다시 보기」를 누르면 언제든 다시 시작할 수 있어요. 그 외에는 자동으로 다시 뜨지 않아요.']
+{tab:'home',target:'.home-actions',title:'버튼 두 개로 시작해요',text:'정원에서는 식물을 돌보고, 미션에서는 사진·퀴즈·관찰 기록에 도전해요. 아래 버튼으로 원하는 곳으로 갈 수 있어요.'},
+{tab:'home',target:'.home-mission',title:'오늘의 미션',text:'오늘 할 수 있는 미션이 여기에 보여요. 완료하면 포인트와 티켓, 정원 돌봄 재화를 받을 수 있어요.'},
+{tab:'home',target:'#ab',title:'출석 체크',text:'매일 출석하고 주간 보상을 받아요. 마지막 날에는 티켓도 받을 수 있어요.'},
+{tab:'home',target:'#tk',title:'미니게임 티켓',text:'보유 티켓 수를 확인해요. 미션 보상이나 주간 출석으로 받고, 미니게임 한 판에 1장을 사용해요.'},
+{tab:'home',target:'#pt',title:'별 포인트',text:'미션 완료, 식물 수확, 친구 응원 등으로 모아요. 상점에서 씨앗과 돌봄 아이템, 계절 꾸미기를 구매할 때 사용해요.'},
+{tab:'garden',target:'.garden-profile-chip',title:'프로필과 정원 레벨',text:'프로필을 누르면 다음 레벨에 필요한 식물 난이도와 수, 현재 진행 상황, 새로 열릴 도감 식물을 확인할 수 있어요.'},
+{tab:'garden',target:'.garden-style-btn',title:'정원 꾸미기',text:'팔레트 버튼에서 보유한 계절 배경을 선택해 정원 풍경을 바꿔요. 상점에서 다른 계절을 구매할 수 있어요.'},
+{tab:'garden',prepare:()=>{const k=[...S.unlockedPlots].find(i=>S.plots[i]==null);if(k!=null){S.sel=k;S.gardenPlotOpen=true;R();}},target:'.garden-plot-panel',title:'빈 땅',text:'열린 빈 땅을 누르면 씨앗을 심거나 보유한 씨앗을 고를 수 있어요. 물·빛·영양·미생물을 주며 식물을 키워요.'},
+{tab:'garden',target:'.garden-scene',title:'오염된 땅',text:'어두운 땅은 아직 회복되지 않은 구역이에요. 식물을 끝까지 키워 정원 레벨을 올리면 새 땅이 열리고 숲이 회복돼요.'},
+{tab:'mission',target:'.chipsrow',title:'미션 주제',text:'관찰·미생물·생물 주제로 미션을 살펴볼 수 있어요. 방식은 사진 인증, 생태 퀴즈, 현실 식물 관찰 기록으로 나뉘어요.'},
+{tab:'mission',target:'#scr .mc',title:'오늘의 미션 카드',text:'카드를 누르면 방법과 보상을 확인해요. 사진은 주변 생물을 찍고, 퀴즈는 문제를 풀고, 관찰 기록은 실제 식물을 살펴보고 적어요.'},
+{tab:'mission',target:'.weekly-goal',title:'주간 미션',text:'전체 탭에서 주간 진행 상황을 확인해요. 한 주 동안 미션 7회와 보상 포인트 150P 조건을 채우면 추가로 80P를 받을 수 있어요.'},
+{tab:'encyclopedia',target:'.chipsrow',title:'도감 분류',text:'전체·나무·꽃 태그로 식물을 나누어 볼 수 있어요.'},
+{tab:'encyclopedia',target:'.encyclopedia-entry',title:'식물 정보 보기',text:'정원 레벨에 따라 공개되는 식물이 달라요. 열려 있는 식물 목록을 누르면 사진과 설명을 볼 수 있어요.'},
+{tab:'shop',target:'.chipsrow',title:'상점 품목',text:'나무·꽃 씨앗, 식물 돌봄 아이템, 계절 꾸미기를 살펴볼 수 있어요. 레벨이 필요한 씨앗은 조건을 달성하면 열려요.'},
+{tab:'shop',target:'.shop-row',title:'포인트로 구매해요',text:'별 포인트로 씨앗과 물·영양·미생물 등 돌봄 아이템을 구매해요. 꾸미기 탭에서는 계절 배경도 살 수 있어요.'},
+{tab:'my',prepare:()=>{S.myView='profile'},target:'#scr .panel',title:'내 프로필',text:'아이디와 칭호, 프로필 이미지를 확인하고 연필 버튼에서 회원 정보를 바꿀 수 있어요.'},
+{tab:'my',target:'#scr .row2',match:'친구 코드',title:'친구 추가 코드',text:'내 친구 코드를 복사해 친구에게 보내거나, 친구 화면에서 친구의 코드를 입력해 추가해요.'},
+{tab:'my',target:'button[onclick*="gallery"]',title:'사진 갤러리',text:'사진 미션을 통과한 사진이 모여요. 갤러리 버튼을 누르면 사진을 모아 볼 수 있어요.'},
+{tab:'friends',target:'#scr .panel',title:'친구와 정원 구경',text:'내 친구 코드를 복사하고 친구 코드를 입력해 추가할 수 있어요. 친구 정원을 구경하고 응원하면 서로 포인트를 받아요.'},
+{tab:'friends',target:'#scr .add',title:'친구 추가',text:'친구의 코드를 입력하고 친구 추가를 누르면 목록에 등록돼요. 등록된 친구의 정원을 구경하고 응원할 수 있어요.'},
+{tab:'game',target:'#scr .gm',title:'미니게임',text:'미션과 출석으로 모은 티켓 1장을 사용해 쓰레기 피하기나 테트리스를 플레이해요.'},
+{tab:'my',prepare:()=>{S.myView='profile'},target:'#scr',title:'준비됐어요!',text:'이용 안내를 마쳤어요. 화면을 누르면 끝나요. 마이페이지의 이용 안내에서 언제든 다시 볼 수 있어요.',finish:true}
 ];
 async function maybeStartTutorial(){try{const r=await api('/api/auth/tutorial/start/',{method:'POST'});if(r.show_tutorial){startTutorial(true);return true;}}catch(e){T('이용 안내를 불러오지 못했어요. 마이페이지에서 다시 볼 수 있어요.');}return false;}
-function startTutorial(automatic){
- if(S.guest||Tutorial.active)return;
- Tutorial.active=true;Tutorial.index=0;Tutorial.returnTab=automatic?'home':S.tab;Tutorial.focus=document.activeElement;
- if($('ov').classList.contains('show'))cl();
- const layer=document.createElement('div');layer.id='tutorial-layer';
- layer.innerHTML='<div class="tutorial-shade" id="tutorial-shade-top"></div><div class="tutorial-shade" id="tutorial-shade-left"></div><div class="tutorial-shade" id="tutorial-shade-right"></div><div class="tutorial-shade" id="tutorial-shade-bottom"></div><div id="tutorial-ring"></div><section class="tutorial-card" role="dialog" aria-label="버튼을 누르며 진행하는 이용 안내" tabindex="-1"><div class="tutorial-top"><span id="tutorial-count"></span><button type="button" onclick="finishTutorial()" aria-label="튜토리얼 닫기">✕</button></div><div class="tutorial-progress"><i id="tutorial-progress"></i></div><div aria-live="polite"><h2 id="tutorial-title"></h2><p id="tutorial-text"></p><b id="tutorial-hint">아래 강조된 실제 버튼을 눌러 주세요.</b></div><div class="tutorial-actions"><button id="tutorial-prev" onclick="moveTutorial(-1)">이전</button><button id="tutorial-retry" onclick="go(tutorialSteps[Tutorial.index][0]);tutorialLocate(true)" hidden>버튼 다시 찾기</button></div><button class="tutorial-skip" onclick="finishTutorial()">안내 종료 · 자동으로 다시 표시하지 않기</button></section>';
- document.body.appendChild(layer);document.addEventListener('click',tutorialClick,true);document.addEventListener('keydown',tutorialKeys,true);window.addEventListener('resize',tutorialSchedule);document.addEventListener('scroll',tutorialSchedule,true);
- Tutorial.observer=new MutationObserver(tutorialSchedule);Tutorial.observer.observe($('scr'),{childList:true,subtree:true});
- go('home');drawTutorial();
-}
-function drawTutorial(){const s=tutorialSteps[Tutorial.index];$('tutorial-count').textContent=(Tutorial.index+1)+' / '+tutorialSteps.length;$('tutorial-title').textContent=s[2];$('tutorial-text').textContent=s[3];$('tutorial-progress').style.width=((Tutorial.index+1)/tutorialSteps.length*100)+'%';$('tutorial-prev').disabled=Tutorial.index===0;tutorialLocate(true);}
+function startTutorial(automatic){if(S.guest||Tutorial.active)return;Tutorial.active=true;Tutorial.index=0;Tutorial.returnTab=automatic?'home':S.tab;Tutorial.focus=document.activeElement;if($('ov').classList.contains('show'))cl();const layer=document.createElement('div');layer.id='tutorial-layer';layer.innerHTML='<div class="tutorial-shade" id="tutorial-shade-top"></div><div class="tutorial-shade" id="tutorial-shade-left"></div><div class="tutorial-shade" id="tutorial-shade-right"></div><div class="tutorial-shade" id="tutorial-shade-bottom"></div><div id="tutorial-ring"></div><section class="tutorial-card" role="dialog" aria-label="초록정원 이용 안내"><div class="tutorial-top"><span id="tutorial-count"></span><button onclick="finishTutorial()" aria-label="튜토리얼 닫기">✕</button></div><div class="tutorial-progress"><i id="tutorial-progress"></i></div><h2 id="tutorial-title"></h2><p id="tutorial-text"></p><b id="tutorial-hint">화면을 누르면 다음 안내로 넘어가요.</b><div class="tutorial-actions"><button id="tutorial-prev" onclick="moveTutorial(-1,event)">이전</button><button id="tutorial-next" onclick="moveTutorial(1,event)">다음</button></div><button class="tutorial-skip" onclick="finishTutorial()">건너뛰기</button></section>';document.body.appendChild(layer);document.addEventListener('click',tutorialClick,true);document.addEventListener('keydown',tutorialKeys,true);window.addEventListener('resize',tutorialSchedule);document.addEventListener('scroll',tutorialSchedule,true);Tutorial.observer=new MutationObserver(tutorialSchedule);Tutorial.observer.observe($('scr'),{childList:true,subtree:true});go('home');drawTutorial();}
+function drawTutorial(){if(!Tutorial.active)return;const s=tutorialSteps[Tutorial.index];s.prepare?.();if(S.tab!==s.tab)go(s.tab);$('tutorial-count').textContent=(Tutorial.index+1)+' / '+tutorialSteps.length;$('tutorial-title').textContent=s.title;$('tutorial-text').textContent=s.text;$('tutorial-progress').style.width=((Tutorial.index+1)/tutorialSteps.length*100)+'%';$('tutorial-prev').disabled=Tutorial.index===0;$('tutorial-next').textContent=s.finish?'끝내기':'다음';tutorialLocate(true);}
 function tutorialSchedule(){if(!Tutorial.active||Tutorial.frame)return;Tutorial.frame=requestAnimationFrame(()=>{Tutorial.frame=0;tutorialLocate(false);});}
-function tutorialLocate(scroll){
- if(!Tutorial.active)return;
- const step=tutorialSteps[Tutorial.index],selector='button[onclick="go(\''+step[1]+'\')"]';
- const candidates=[...document.querySelectorAll(selector)];
- Tutorial.target=candidates.find(e=>e.getClientRects().length&&e.closest(step[0]==='my'?'#scr':'#nav'))||candidates.find(e=>e.getClientRects().length);
- const card=document.querySelector('.tutorial-card'),ring=$('tutorial-ring');
- if(!Tutorial.target){ring.hidden=true;$('tutorial-retry').hidden=false;$('tutorial-hint').textContent='화면이 바뀌었어요. 버튼 다시 찾기를 눌러 주세요.';tutorialShade(0,0,0,0);card.style.top='20px';card.style.bottom='auto';return;}
- $('tutorial-retry').hidden=true;$('tutorial-hint').textContent='빛나는 실제 버튼을 눌러 다음으로 진행하세요.';ring.hidden=false;
- if(scroll)Tutorial.target.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
- const r=Tutorial.target.getBoundingClientRect(),w=window.innerWidth,h=window.innerHeight;
- const x=Math.max(0,r.left-5),y=Math.max(0,r.top-5),right=Math.min(w,r.right+5),bottom=Math.min(h,r.bottom+5);
- Object.assign(ring.style,{left:x+'px',top:y+'px',width:(right-x)+'px',height:(bottom-y)+'px'});tutorialShade(x,y,right,bottom);
- card.style.top='auto';card.style.bottom='auto';card.style.maxHeight=Math.max(110,Math.max(y,h-bottom)-24)+'px';
- if(y>=h-bottom)card.style.bottom=(h-y+12)+'px';else card.style.top=(bottom+12)+'px';
-}
-function tutorialShade(x,y,right,bottom){const w=innerWidth,h=innerHeight;const boxes={top:[0,0,w,y],left:[0,y,x,bottom-y],right:[right,y,w-right,bottom-y],bottom:[0,bottom,w,h-bottom]};for(const [k,b] of Object.entries(boxes))Object.assign($('tutorial-shade-'+k).style,{left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px'});}
-function tutorialClick(e){
- if(!Tutorial.active||e.target.closest('.tutorial-card'))return;
- if(Tutorial.target&&Tutorial.target.contains(e.target)){
-  if(Tutorial.timer){e.preventDefault();e.stopImmediatePropagation();return;}
-  Tutorial.timer=setTimeout(()=>{Tutorial.timer=0;if(!Tutorial.active)return;if(S.tab!==tutorialSteps[Tutorial.index][1]){tutorialLocate(false);return;}moveTutorial(1);},80);return;
- }
- e.preventDefault();e.stopImmediatePropagation();
-}
-function moveTutorial(delta){if(!Tutorial.active)return;const n=Tutorial.index+delta;if(n>=tutorialSteps.length){finishTutorial(false);T('이용 안내를 마쳤어요. 마이페이지에서 다시 볼 수 있어요.');return;}Tutorial.index=Math.max(0,n);if(delta<0)go(tutorialSteps[Tutorial.index][0]);drawTutorial();if(Tutorial.target)Tutorial.target.focus();}
-function finishTutorial(restore=true){if(!Tutorial.active)return;Tutorial.active=false;clearTimeout(Tutorial.timer);Tutorial.timer=0;cancelAnimationFrame(Tutorial.frame);Tutorial.frame=0;if(Tutorial.observer)Tutorial.observer.disconnect();document.removeEventListener('click',tutorialClick,true);document.removeEventListener('keydown',tutorialKeys,true);window.removeEventListener('resize',tutorialSchedule);document.removeEventListener('scroll',tutorialSchedule,true);$('tutorial-layer')?.remove();Tutorial.target=null;if(restore){go(Tutorial.returnTab);if(Tutorial.focus?.isConnected)Tutorial.focus.focus();}}
-function tutorialKeys(e){if(!Tutorial.active)return;if(e.key==='Escape'){e.preventDefault();finishTutorial();return;}if(e.key==='Tab'){const items=[Tutorial.target,...document.querySelectorAll('#tutorial-layer button:not([disabled]):not([hidden])')].filter(e=>e&&e.getClientRects().length);const i=items.indexOf(document.activeElement);e.preventDefault();items[(i+(e.shiftKey?-1:1)+items.length)%items.length]?.focus();}else if((e.key==='Enter'||e.key===' ')&&!e.target.closest('.tutorial-card')&&e.target!==Tutorial.target){e.preventDefault();e.stopImmediatePropagation();}}
+function tutorialFind(s){if(s.match)return [...document.querySelectorAll(s.target)].find(e=>e.getClientRects().length&&e.textContent.includes(s.match));return [...document.querySelectorAll(s.target)].find(e=>e.getClientRects().length&&e.offsetWidth&&e.offsetHeight);}
+function tutorialLocate(scroll){if(!Tutorial.active)return;const s=tutorialSteps[Tutorial.index],ring=$('tutorial-ring'),card=document.querySelector('.tutorial-card');Tutorial.target=tutorialFind(s);if(!Tutorial.target){ring.hidden=true;tutorialShade(0,0,1,1);card.style.top='auto';card.style.bottom='max(20px, env(safe-area-inset-bottom))';return;}ring.hidden=false;if(scroll&&Tutorial.target.closest('#scr'))Tutorial.target.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});const r=Tutorial.target.getBoundingClientRect(),w=innerWidth,h=innerHeight,x=Math.max(0,r.left-6),y=Math.max(0,r.top-6),right=Math.min(w,r.right+6),bottom=Math.min(h,r.bottom+6);Object.assign(ring.style,{left:x+'px',top:y+'px',width:(right-x)+'px',height:(bottom-y)+'px'});tutorialShade(x,y,right,bottom);card.style.bottom='auto';card.style.top='auto';card.style.maxHeight='min(38dvh, 310px)';const ch=card.offsetHeight||220,gap=12;if(h-bottom>=ch+gap)card.style.top=(bottom+gap)+'px';else if(y>=ch+gap)card.style.top=Math.max(10,y-ch-gap)+'px';else card.style.bottom='max(16px, env(safe-area-inset-bottom))';}
+function tutorialShade(x,y,right,bottom){const w=innerWidth,h=innerHeight,boxes={top:[0,0,w,y],left:[0,y,x,bottom-y],right:[right,y,w-right,bottom-y],bottom:[0,bottom,w,h-bottom]};for(const [k,b] of Object.entries(boxes))Object.assign($('tutorial-shade-'+k).style,{left:b[0]+'px',top:b[1]+'px',width:b[2]+'px',height:b[3]+'px'});}
+function tutorialClick(e){if(!Tutorial.active)return;if(e.target.closest('.tutorial-card')&&e.target.closest('button'))return;e.preventDefault();e.stopImmediatePropagation();moveTutorial(1);}
+function moveTutorial(delta,e){e?.preventDefault();e?.stopPropagation();if(!Tutorial.active)return;const n=Tutorial.index+delta;if(n<0)return;if(n>=tutorialSteps.length||tutorialSteps[Tutorial.index].finish){finishTutorial(false);T('이용 안내를 마쳤어요!');return;}Tutorial.index=n;drawTutorial();if(Tutorial.target)Tutorial.target.focus({preventScroll:true});}
+function finishTutorial(restore=true){if(!Tutorial.active)return;Tutorial.active=false;cancelAnimationFrame(Tutorial.frame);Tutorial.frame=0;if(Tutorial.observer)Tutorial.observer.disconnect();document.removeEventListener('click',tutorialClick,true);document.removeEventListener('keydown',tutorialKeys,true);window.removeEventListener('resize',tutorialSchedule);document.removeEventListener('scroll',tutorialSchedule,true);$('tutorial-layer')?.remove();Tutorial.target=null;if(restore){go(Tutorial.returnTab);if(Tutorial.focus?.isConnected)Tutorial.focus.focus();}}
+function tutorialKeys(e){if(!Tutorial.active)return;if(e.key==='Escape'){e.preventDefault();finishTutorial();return;}if(e.key==='Tab'){const a=[...document.querySelectorAll('#tutorial-layer button:not([disabled])')],i=a.indexOf(document.activeElement);e.preventDefault();a[(i+(e.shiftKey?-1:1)+a.length)%a.length]?.focus();}else if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopImmediatePropagation();moveTutorial(1);}}

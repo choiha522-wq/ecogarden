@@ -22,7 +22,7 @@ from missions.models import Mission, QuizQuestion
 
 CATEGORY_GUIDE = """- observation(관찰): 야외에서 식물·곤충·흙·날씨 등을 직접 보고 기록하는 미션
 - microbe(미생물): 낙엽 분해, 흙 속 생물, 발효 등 눈에 안 보이는 생태계를 배우는 미션
-- local(지역): 우리 동네 공원·화단·도시 숲 등 지역 생태를 알아보는 미션"""
+- biology(생물): 식물·곤충·새 등 생물의 특징, 생태계 안의 관계, 생물다양성을 알아보는 미션"""
 
 PROMPT_TEMPLATE = """너는 초·중·고등학생을 위한 '육상생태계' 교육 서비스 「초록정원」의 미션 기획자야.
 학생들은 미션을 수행하면 포인트를 받아 씨앗·영양제로 바꾸고, 나만의 생태정원을 가꾸며 생태계를 배워.
@@ -51,7 +51,7 @@ photo, quiz, record를 섞어서 만들어. 사진 인증은 전체의 20% 이�
 1. 학생이 혼자 또는 보호자·선생님과 안전하게 할 수 있는 활동만 만들어. 위험한 곳(도로변·차도 근처, 물가, 높은 곳)이나 야생동물 접촉, 식물 채취·훼손을 유도하면 안 돼. "길가" 같은 도로를 연상시키는 장소 표현도 쓰지 마. 곤충·동물은 "만지지 말고 멀리서 관찰"하도록 안내해.
 2. 학교·집 근처 공원, 화단, 베란다, 운동장처럼 누구나 접근 가능한 장소에서 가능해야 해.
 3. title은 20자 이내의 쉬운 말, description은 1~2문장으로 "무엇을 하면 되는지"를 구체적으로 써. 학년에 맞는 어휘를 써.
-4. reward_points는 쉬움 20, 보통 30, 어려움 40~50. reward_tickets는 모두 1.
+4. reward_points는 쉬움 30, 보통 40, 어려움 50~60. reward_tickets는 모두 1.
 5. 카테고리가 골고루 섞이게 하고, 아래 [이미 있는 미션]과 겹치거나 비슷한 것은 만들지 마.
 6. emoji는 미션을 대표하는 이모지 1개.
 
@@ -79,7 +79,7 @@ photo, quiz, record를 섞어서 만들어. 사진 인증은 전체의 20% 이�
   {{
     "title": "...",
     "description": "...",
-    "category": "observation | microbe | local 중 하나",
+    "category": "observation | microbe | biology 중 하나",
     "mission_type": "photo | quiz | record 중 하나",
     "emoji": "🌱",
     "reward_points": 30,
@@ -91,7 +91,7 @@ photo, quiz, record를 섞어서 만들어. 사진 인증은 전체의 20% 이�
   }}
 ]"""
 
-VALID_CATEGORIES = {'observation', 'microbe', 'local'}
+VALID_CATEGORIES = {'observation', 'microbe', 'biology'}
 VALID_TYPES = {'photo', 'quiz', 'record'}
 
 
@@ -150,7 +150,7 @@ def parse_missions(text):
             'category': it['category'],
             'mission_type': mtype,
             'emoji': str(it.get('emoji', '🌱'))[:8],
-            'reward_points': max(10, min(int(it.get('reward_points', 30)), 60)),
+            'reward_points': max(30, min(int(it.get('reward_points', 40)), 60)),
             'reward_tickets': max(0, min(int(it.get('reward_tickets', 1)), 3)),
             'reward_water': 1 if mtype == 'photo' else 2,
             'reward_sunlight': 1 if mtype == 'photo' else 0,

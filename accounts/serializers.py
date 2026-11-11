@@ -3,21 +3,19 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .attendance import attendance_state
-from .models import User
+from .models import User, SEASON_CHOICES
+from .profile import avatar_emoji, avatar_options, garden_level, title_options
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     consent = serializers.BooleanField(write_only=True)
+    favorite_season = serializers.ChoiceField(choices=SEASON_CHOICES, required=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'region_sido', 'region_sigungu', 'school_level', 'consent')
+        fields = ('username', 'email', 'password', 'school_level', 'favorite_season', 'consent')
         extra_kwargs = {
-            'region_sido': {'required': True, 'allow_blank': False, 'error_messages': {
-                'required': '사는 지역(시·도)을 골라 주세요.', 'blank': '사는 지역(시·도)을 골라 주세요.',
-                'invalid_choice': '사는 지역(시·도)을 골라 주세요.', 'null': '사는 지역(시·도)을 골라 주세요.'}},
-            'region_sigungu': {'required': False},
             'school_level': {'required': False},
         }
 
@@ -30,6 +28,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop('consent')
         password = validated_data.pop('password')
         user = User.objects.create_user(password=password, privacy_consent_at=timezone.now(), points=30, **validated_data)
+        from garden.models import GardenProgress
+        GardenProgress.objects.create(user=user, theme=user.favorite_season, owned_themes=[user.favorite_season])
         # 첫날부터 상점·정원을 경험할 수 있는 시작 꾸러미 (씨앗 데이터가 준비된 경우)
         from garden.models import SeedType, UserSeedInventory
         starter_seed = SeedType.objects.filter(key='pine').first()
@@ -44,12 +44,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     attendance_streak = serializers.SerializerMethodField()
     attendance_claimed_today = serializers.SerializerMethodField()
+    profile_avatar_emoji = serializers.SerializerMethodField()
+    profile_title_options = serializers.SerializerMethodField()
+    profile_avatar_options = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'points', 'tickets', 'nutrients', 'microbes', 'water_drops', 'sunlight',
-            'friend_code', 'region_sido', 'region_sigungu', 'school_level', 'date_joined',
+            'friend_code', 'school_level', 'date_joined',
+            'favorite_season', 'profile_title', 'profile_avatar', 'profile_avatar_emoji',
+            'profile_title_options', 'profile_avatar_options',
             'attendance_streak', 'attendance_claimed_today',
         )
         read_only_fields = fields
@@ -60,10 +65,44 @@ class UserSerializer(serializers.ModelSerializer):
     def get_attendance_claimed_today(self, obj):
         return attendance_state(obj)['claimed']
 
+    def get_profile_avatar_emoji(self, obj):
+        return avatar_emoji(obj.profile_avatar)
+
+    def get_profile_title_options(self, obj):
+        return title_options(garden_level(obj))
+
+    def get_profile_avatar_options(self, obj):
+        return avatar_options(garden_level(obj))
+
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
-    """마이페이지에서 고칠 수 있는 정보 (지역, 학교급)."""
+    """아이디, 계절, 해금된 칭호·프로필 이미지를 수정해요."""
     class Meta:
         model = User
-        fields = ('region_sido', 'region_sigungu', 'school_level')
-        extra_kwargs = {'region_sido': {'allow_blank': False}}
+        fields = ('username', 'favorite_season', 'profile_title', 'profile_avatar', 'school_level')
+        extra_kwargs = {
+            'username': {'required': False},
+            'favorite_season': {'required': False},
+            'profile_title': {'required': False},
+            'profile_avatar': {'required': False},
+            'school_level': {'required': False},
+        }
+
+    def validate_username(self, value):
+        value = value.strip()
+        User._meta.get_field('username').run_validators(value)
+        if User.objects.exclude(pk=self.instance.pk).filter(username__iexact=value).exists():
+            raise serializers.ValidationError('이미 사용 중인 아이디예요.')
+        return value
+
+    def validate_profile_title(self, value):
+        level = garden_level(self.instance)
+        if not any(item['title'] == value and item['unlocked'] for item in title_options(level)):
+            raise serializers.ValidationError('아직 해금되지 않은 칭호예요.')
+        return value
+
+    def validate_profile_avatar(self, value):
+        level = garden_level(self.instance)
+        if not any(item['key'] == value and item['unlocked'] for item in avatar_options(level)):
+            raise serializers.ValidationError('아직 해금되지 않은 프로필 이미지예요.')
+        return value

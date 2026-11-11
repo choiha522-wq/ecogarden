@@ -5,7 +5,9 @@ from .models import GardenProgress
 
 TIER_FIELDS = {1: 'easy_completed', 2: 'medium_completed', 3: 'hard_completed'}
 TIER_LABELS = {1: '쉬움', 2: '보통', 3: '어려움'}
-MAX_GRID_SIZE = 5
+MAX_GRID_SIZE = 7
+GRID_STRIDE = MAX_GRID_SIZE
+MAX_GARDEN_LEVEL = 10
 
 
 def tier_for_difficulty(difficulty):
@@ -13,13 +15,28 @@ def tier_for_difficulty(difficulty):
 
 
 def grid_size_for_level(level):
-    return 3 if level <= 1 else 4 if level <= 4 else MAX_GRID_SIZE
+    return 3 if level <= 1 else 5 if level <= 4 else 6 if level <= 6 else MAX_GRID_SIZE
 
 
-PLOT_COUNTS = (9, 11, 13, 16, 19, 22, 25)
-SLOT_ORDER = ([r * 5 + c for r in range(3) for c in range(3)]
-              + [r * 5 + c for r in range(4) for c in range(4) if r >= 3 or c >= 3]
-              + [r * 5 + c for r in range(5) for c in range(5) if r >= 4 or c >= 4])
+PLOT_COUNTS = (9, 13, 19, 25, 32, 40, 49)
+
+
+def _center_out_slot_order():
+    center = MAX_GRID_SIZE // 2
+    order = [r * GRID_STRIDE + c
+             for r in range(center - 1, center + 2)
+             for c in range(center - 1, center + 2)]
+    for radius in (2, 3):
+        lo, hi = center - radius, center + radius
+        ring = ([(lo, c) for c in range(lo, hi + 1)]
+                + [(r, hi) for r in range(lo + 1, hi + 1)]
+                + [(hi, c) for c in range(hi - 1, lo - 1, -1)]
+                + [(r, lo) for r in range(hi - 1, lo, -1)])
+        order.extend(r * GRID_STRIDE + c for r, c in ring)
+    return order
+
+
+SLOT_ORDER = _center_out_slot_order()
 
 
 def plot_count_for_level(level):
@@ -29,7 +46,7 @@ def plot_count_for_level(level):
 def unlocked_slot_indexes(size, level=None):
     if level is not None:
         return SLOT_ORDER[:plot_count_for_level(level)]
-    return [row * MAX_GRID_SIZE + col for row in range(size) for col in range(size)]
+    return list(range(MAX_GRID_SIZE * MAX_GRID_SIZE))
 
 
 def requirements_for_target_level(target_level):
@@ -44,7 +61,7 @@ def requirements_for_target_level(target_level):
 def calculate_level(progress):
     counts = {1: progress.easy_completed, 2: progress.medium_completed, 3: progress.hard_completed}
     level = 1
-    while level < 7:
+    while level < MAX_GARDEN_LEVEL:
         required = requirements_for_target_level(level + 1)
         if all(counts[tier] >= amount for tier, amount in required.items()):
             level += 1
@@ -78,6 +95,7 @@ def progress_payload(progress):
     already_required = requirements_for_target_level(progress.level)[tier]
     target_count = progress.level + 2
     completed = max(0, getattr(progress, field) - already_required)
+    favorite_season = getattr(progress.user, 'favorite_season', 'spring') or 'spring'
     return {
         'level': progress.level,
         'total_completed': progress.total_completed,
@@ -86,11 +104,12 @@ def progress_payload(progress):
             'medium': progress.medium_completed,
             'hard': progress.hard_completed,
         },
-        'next_level': min(7, progress.level + 1),
-        'max_level': 7,
-        'is_max_level': progress.level >= 7,
+        'next_level': min(MAX_GARDEN_LEVEL, progress.level + 1),
+        'max_level': MAX_GARDEN_LEVEL,
+        'is_max_level': progress.level >= MAX_GARDEN_LEVEL,
         'theme': progress.theme,
-        'owned_themes': list(set(['spring'] + progress.owned_themes)),
+        'owned_themes': sorted(set(progress.owned_themes or []) | {favorite_season}),
+        'favorite_season': favorite_season,
         'required_tier': tier,
         'required_tier_label': TIER_LABELS[tier],
         'required_count': target_count,

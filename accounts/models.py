@@ -15,6 +15,12 @@ REGION_CHOICES = [(x, x) for x in (
     '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
 )]
 SCHOOL_CHOICES = [('elementary', '초등학생'), ('middle', '중학생'), ('high', '고등학생')]
+SEASON_CHOICES = [('spring', '봄'), ('summer', '여름'), ('autumn', '가을'), ('winter', '겨울')]
+PROFILE_AVATAR_CHOICES = [
+    ('farmer', '정원사'), ('bird', '새'), ('rabbit', '토끼'), ('deer', '사슴'),
+    ('squirrel', '다람쥐'), ('fox', '여우'), ('butterfly', '나비'),
+    ('turtle', '거북이'), ('owl', '부엉이'), ('hedgehog', '고슴도치'),
+]
 
 
 class User(AbstractUser):
@@ -37,15 +43,15 @@ class User(AbstractUser):
     attendance_streak = models.PositiveSmallIntegerField(default=0)   # 이번 7일 주기에서 출석한 날 수
     attendance_date = models.DateField(null=True, blank=True)         # 마지막으로 출석한 날
 
-    # --- 사진으로 식물 심기: 하루 횟수 제한 ---
-    photo_plant_date = models.DateField(null=True, blank=True)
-    photo_plant_count = models.PositiveSmallIntegerField(default=0)
     friend_code = models.CharField(max_length=20, unique=True, blank=True, null=True)
 
     # --- 회원가입 정보 / 마이페이지 ---
     region_sido = models.CharField('시·도', max_length=10, choices=REGION_CHOICES, blank=True)
     region_sigungu = models.CharField('시·군·구', max_length=30, blank=True)
     school_level = models.CharField('학교급', max_length=12, choices=SCHOOL_CHOICES, blank=True)
+    favorite_season = models.CharField('좋아하는 계절', max_length=10, choices=SEASON_CHOICES, default='spring')
+    profile_title = models.CharField('칭호', max_length=40, default='초록정원 탐험가')
+    profile_avatar = models.CharField('프로필 이미지', max_length=16, choices=PROFILE_AVATAR_CHOICES, default='farmer')
     privacy_consent_at = models.DateTimeField('개인정보 수집·이용 동의 시각', null=True, blank=True)
 
     def __str__(self):
