@@ -29,7 +29,7 @@ const fallbackMount=()=>{
       const k=(row-4)*7+(col-4),open=S.unlockedPlots.has(k),plant=S.plots[k]!=null;
       const fill=open?(S.theme==='winter'?'#C4DCE1':'#74AF64'):'#352A42';
       const icon=open?(plant?(TY[S.types[k]]||{}).e||ST[S.plots[k]]:'🌱'):'🔒';
-      parts.push(`<g onclick="selP(${k})" style="cursor:pointer"><polygon points="${x},${y-8} ${x+14},${y} ${x},${y+8} ${x-14},${y}" fill="${fill}" stroke="#79D889" stroke-width="1.5"/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="9">${icon}</text></g>`);
+      parts.push(`<g onclick="toggleGardenPlot(${k})" style="cursor:pointer"><polygon points="${x},${y-8} ${x+14},${y} ${x},${y+8} ${x-14},${y}" fill="${fill}" stroke="#79D889" stroke-width="1.5"/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="9">${icon}</text></g>`);
     }else{
       const tree=row+col<=14;
       const fill=tree?'#57944E':'#75B96A';
@@ -143,7 +143,7 @@ W3.mount=()=>{
 };
 const mount3d=W3.mount;W3.mount=()=>{if(S.guest){clearTimeout(animalEventTimer);animalEventTimer=null;animalEventSessionStarted=false;clearActiveCritters()}try{mount3d()}catch(error){console.error('정원 장면 구성 실패',error);W3.mount=fallbackMount;fallbackMount()}};
 addEventListener('resize',W3.size);
-cv.addEventListener('pointerdown',e=>{if(S.tab!='garden')return;const b=cv.getBoundingClientRect(),rc=new h.Raycaster();rc.setFromCamera(new h.Vector2((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1),cm);const o=rc.intersectObjects([...tiles,pg],true)[0];if(o){let p=o.object;while(p&&p.userData.k==null)p=p.parent;if(p){if(S.tab=='garden'){const k=p.userData.k;selP(k);if(S.plots[k]>=4&&!S.pd[k]?.is_dead)T('✨ 성장 완료! 아래 수확 버튼을 눌러요');}}}});
+cv.addEventListener('pointerdown',e=>{if(S.tab!='garden')return;const b=cv.getBoundingClientRect(),rc=new h.Raycaster();rc.setFromCamera(new h.Vector2((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1),cm);const o=rc.intersectObjects([...tiles,pg],true)[0];if(o){let p=o.object;while(p&&p.userData.k==null)p=p.parent;if(p){if(S.tab=='garden'){const k=p.userData.k,opened=toggleGardenPlot(k);if(opened&&S.plots[k]>=4&&!S.pd[k]?.is_dead)T('✨ 성장 완료! 아래 수확 버튼을 눌러요');}}}});
 const ck=new h.Clock();(function lp(){requestAnimationFrame(lp);if(!cv.isConnected)return;const t=ck.getElapsedTime();wr.rotation.y=0;updateCritters(performance.now());
 cls.forEach((c,i)=>c.position.x=((t*.4+i*7)%16)-8);pg.children.forEach((g,i)=>g.scale.y=1+Math.sin(t*2+i)*.04);try{r.render(sc,cm)}catch(error){console.error('정원 그리기 실패',error);W3.mount=fallbackMount;fallbackMount()}})();
 }catch(error){console.error('정원 장면 초기화 실패',error);W3.mount=fallbackMount}

@@ -3,6 +3,7 @@
 
 function toggleGardenProgress(){const box=$('garden-level-detail'),button=$('garden-level-toggle');if(!box)return;box.hidden=!box.hidden;button?.setAttribute('aria-expanded',String(!box.hidden))}
 function closeGardenPlot(){S.gardenPlotOpen=false;R()}
+function toggleGardenPlot(i){if(S.gardenPlotOpen&&S.sel===i){closeGardenPlot();return false}selP(i);return true}
 function mountGardenPlotPanel(){
   const stage=document.querySelector('.garden-stage'),footer=document.querySelector('.garden-footer');
   if(!stage||!footer)return;
@@ -10,7 +11,7 @@ function mountGardenPlotPanel(){
   footer.querySelector('.garden-resources')?.remove();
   const panel=footer.querySelector('.garden-plot-panel');footer.remove();
   if(panel&&S.gardenPlotOpen){
-    const shade=document.createElement('button');shade.type='button';shade.className='garden-plot-shade';shade.setAttribute('aria-label','닫기');shade.onclick=closeGardenPlot;
+    const shade=document.createElement('div');shade.className='garden-plot-shade';shade.setAttribute('aria-hidden','true');
     panel.classList.add('garden-plot-popover');stage.append(shade,panel);
   }
   W3.size?.();

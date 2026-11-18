@@ -54,7 +54,7 @@ main.garden-screen{display:flex;min-height:0;overflow:hidden;padding:0}
 .garden-level-detail span{line-height:1.45}
 .garden-stage .gb.garden-scene{background:transparent;border:0;border-radius:inherit}
 .garden-scene>.seasonal-garden-grid{position:absolute!important;inset:0;width:100%;height:100%;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(7,minmax(0,1fr));padding:10px}
-.garden-plot-shade{position:absolute;z-index:2;inset:0;background:#10201618}
+.garden-plot-shade{position:absolute;z-index:2;inset:0;background:#10201618;pointer-events:none}
 .garden-plot-popover{position:absolute;z-index:4;left:10px;right:10px;bottom:10px;min-height:170px;max-height:min(50dvh,340px);overflow-y:auto;padding:16px 16px;border-color:#ffffffb8;background:color-mix(in srgb,var(--card) 96%,transparent);box-shadow:0 8px 28px #10251c45;backdrop-filter:blur(8px)}
 .garden-plot-popover:has(.garden-empty-actions){display:flex;flex-direction:column;justify-content:flex-start;min-height:0;gap:5px}.garden-plot-popover:has(.garden-empty-actions) .garden-empty-actions{margin-top:0}
 @media(max-height:620px){.garden-layout{gap:4px;padding-top:4px}.garden-topbar{min-height:40px}.garden-avatar{width:34px;height:34px;font-size:21px}.garden-plot-panel{max-height:108px}.garden-resources{min-height:16px;font-size:9px}.garden-care-btn,.garden-seed,.garden-seed-more,.garden-harvest-btn{padding-top:8px;padding-bottom:8px}}
